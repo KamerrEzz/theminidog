@@ -48,13 +48,17 @@ Las imágenes de Docker Hub vinieron del mismo lugar. El sitio de documentación
 
 ## Qué tiene que ver Zeew Space con esto
 
-Dirijo [Zeew Space](https://zeew.space) — una plataforma educativa donde la gente aprende a programar construyendo cosas reales. La filosofía es la misma que impulsó este proyecto: aprendes haciendo, y haces cosas reales desde el primer día.
+Dirijo [Zeew Space](https://zeew.space) — una plataforma donde aprendes a programar construyendo cosas reales desde el primer día. No es teoría en videos infinitos. El modelo es: entiendes un concepto, lo aplicas inmediatamente en código, recibes feedback de un humano, y terminas con un proyecto que puedes mostrar en tu portafolio.
 
-Si quieres aprender programación — o si ya eres desarrollador y quieres profundizar en sistemas, desarrollo asistido por IA, o construir productos reales — únete a la comunidad en Discord:
+Funciona en rutas — caminos progresivos donde cada curso es la base del siguiente. Aprendes JavaScript, después React, después Next.js, y al final de cada etapa tienes algo funcional que es tuyo. La IA está integrada como herramienta que acelera lo que ya sabes — no como muleta.
 
-**[discord.zeew.space](https://zeew.space)** — enseñamos programación, construimos cosas juntos y hablamos honestamente sobre cómo es aprender en la era de la IA.
+La diferencia: otras plataformas te enseñan a programar. Zeew te enseña a pensar como programador, después te enseña la sintaxis.
 
-Este proyecto es un ejemplo de cómo se ve eso en la práctica.
+Si quieres aprender a programar — o profundizar en sistemas, desarrollo asistido por IA, o construir productos reales:
+
+**[zeew.space/discord](https://zeew.space/discord)** — únete a la comunidad, recibe feedback sobre lo que construyes, y aprende junto a personas que están haciendo lo mismo.
+
+Este proyecto es un ejemplo de cómo se ve aprender construyendo en la práctica.
 
 ---
 
@@ -80,4 +84,4 @@ Ese entendimiento no caduca.
 
 ---
 
-*KamerrEzz — Zeew Space · [GitHub](https://github.com/KamerrEzz) · [Discord](https://zeew.space)*
+*KamerrEzz — Zeew Space · [GitHub](https://github.com/KamerrEzz) · [Discord](https://zeew.space/discord)*
