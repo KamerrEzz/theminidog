@@ -1,26 +1,51 @@
 services:
-  stubserver:
-    build:
-      context: ..
-      dockerfile: Dockerfile.stubserver
-    ports:
-      - "8080:8080"
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
     environment:
-      STUB_ADDR: ":8080"
+      POSTGRES_USER: minidog
+      POSTGRES_PASSWORD: minidog
+      POSTGRES_DB: miniobserv
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      test: ["CMD-SHELL", "pg_isready -U minidog -d miniobserv"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile.server
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATABASE_URL: "postgres://minidog:minidog@timescaledb:5432/miniobserv?sslmode=disable"
+      AGENT_TOKEN: "change-me-use-a-real-secret-min-16ch"
+      MIGRATIONS_PATH: "./migrations"
+      LOG_LEVEL: "info"
+    ports:
+      - "8080:8080"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   agent:
     build:
       context: ..
       dockerfile: Dockerfile.agent
     environment:
-      SERVER_URL: "http://stubserver:8080"
-      COLLECT_INTERVAL: "5s"
-      LOG_LEVEL: "debug"
+      SERVER_URL: "http://server:8080"
+      AGENT_TOKEN: "change-me-use-a-real-secret-min-16ch"
+      COLLECT_INTERVAL: "10s"
+      LOG_LEVEL: "info"
     depends_on:
-      stubserver:
+      server:
         condition: service_healthy
+
+volumes:
+  timescaledb_data:
