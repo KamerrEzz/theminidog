@@ -27,9 +27,10 @@ const enSidebar = [
   {
     text: 'Behind the scenes',
     items: [
+      { text: 'Built with Curiosity', link: '/built-with-curiosity' },
       { text: 'Agent vs Server', link: '/agent-vs-server' },
-      { text: 'Workflows & CI/CD', link: '/workflow-setup' },
       { text: 'How We Built It', link: '/how-we-built-it' },
+      { text: 'Workflows & CI/CD', link: '/workflow-setup' },
     ],
   },
 ]
@@ -61,9 +62,10 @@ const esSidebar = [
   {
     text: 'Detrás del proyecto',
     items: [
+      { text: 'Construido con curiosidad', link: '/es/construido-con-curiosidad' },
       { text: 'Agente vs Servidor', link: '/es/agente-vs-servidor' },
-      { text: 'Workflows y CI/CD', link: '/es/configuracion-workflows' },
       { text: 'Cómo lo construimos', link: '/es/como-lo-construimos' },
+      { text: 'Workflows y CI/CD', link: '/es/configuracion-workflows' },
     ],
   },
 ]
