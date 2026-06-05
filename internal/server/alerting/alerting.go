@@ -112,26 +112,41 @@ func ruleKey(host, name string, op Op, threshold float64) string {
 	return fmt.Sprintf("%s/%s/%s/%g", host, name, op, threshold)
 }
 
+// Option configures an Evaluator.
+type Option func(*Evaluator)
+
+// WithNotifiers attaches notifiers fired on FIRING/RESOLVED transitions.
+// Dispatch is fire-and-forget — each Notifier runs in its own goroutine.
+func WithNotifiers(n []Notifier) Option {
+	return func(e *Evaluator) { e.notifiers = n }
+}
+
 // Evaluator runs threshold rules against metric data on a 30-second ticker.
 type Evaluator struct {
-	rules []Rule
-	repo  MetricQuerier
-	mu    sync.RWMutex
-	state map[string]Alert
-	log   *slog.Logger
+	rules     []Rule
+	repo      MetricQuerier
+	mu        sync.RWMutex
+	state     map[string]Alert
+	log       *slog.Logger
+	notifiers []Notifier
 }
 
 // NewEvaluator creates an Evaluator. log may be nil (falls back to slog.Default()).
-func NewEvaluator(rules []Rule, repo MetricQuerier, log *slog.Logger) *Evaluator {
+// opts are applied after initialization; omitting them preserves backward compatibility.
+func NewEvaluator(rules []Rule, repo MetricQuerier, log *slog.Logger, opts ...Option) *Evaluator {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Evaluator{
+	e := &Evaluator{
 		rules: rules,
 		repo:  repo,
 		state: make(map[string]Alert),
 		log:   log,
 	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
 }
 
 // ActiveAlerts returns a snapshot of all current alert states.
@@ -238,11 +253,28 @@ func (e *Evaluator) evaluate(ctx context.Context) {
 						"op", string(rule.Op),
 						"threshold", rule.Threshold,
 						"value", mean)
+					e.notifyAll(ctx, "firing", Rule{
+						Host:      host,
+						Name:      rule.Name,
+						Op:        rule.Op,
+						Threshold: rule.Threshold,
+						For:       rule.For,
+					}, mean, now)
 				} else {
 					e.log.InfoContext(ctx, "alert resolved",
 						"host", host,
 						"name", rule.Name,
 						"value", mean)
+					// Only notify resolved if we transitioned FROM firing (existed must be true).
+					if existed && prev.State == StateFiring {
+						e.notifyAll(ctx, "resolved", Rule{
+							Host:      host,
+							Name:      rule.Name,
+							Op:        rule.Op,
+							Threshold: rule.Threshold,
+							For:       rule.For,
+						}, mean, now)
+					}
 				}
 			}
 		}
@@ -259,4 +291,28 @@ func (e *Evaluator) hostsFor(ctx context.Context, rule Rule) []string {
 		return nil
 	}
 	return hosts
+}
+
+// notifyAll dispatches event to every notifier in its own goroutine (fire-and-forget).
+// Errors are swallowed here; each Notifier logs its own failures.
+// Uses context.WithoutCancel so the goroutine survives the 20s eval-context cancellation.
+func (e *Evaluator) notifyAll(ctx context.Context, event string, rule Rule, value float64, at time.Time) {
+	if len(e.notifiers) == 0 {
+		return
+	}
+	ev := NotificationEvent{Event: event, Rule: rule, Value: value, FiredAt: at}
+	for _, n := range e.notifiers {
+		n := n
+		go func() { _ = n.Notify(context.WithoutCancel(ctx), ev) }()
+	}
+}
+
+// NotifyHostDown dispatches a synthetic host.down firing event to all configured
+// notifiers. Nil-safe — safe to call on a nil *Evaluator.
+func (e *Evaluator) NotifyHostDown(host string) {
+	if e == nil {
+		return
+	}
+	rule := Rule{Host: host, Name: "host.down", Op: OpGT, Threshold: 0}
+	e.notifyAll(context.Background(), "firing", rule, 0, time.Now().UTC())
 }

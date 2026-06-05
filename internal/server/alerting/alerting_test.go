@@ -299,3 +299,136 @@ func TestEvaluator_race(t *testing.T) {
 
 	wg.Wait()
 }
+
+// ---- WithNotifiers integration tests ----
+
+// spyNotifier is a test double that captures all Notify calls.
+type spyNotifier struct {
+	mu     sync.Mutex
+	events []alerting.NotificationEvent
+}
+
+func (s *spyNotifier) Notify(_ context.Context, ev alerting.NotificationEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, ev)
+	return nil
+}
+
+func (s *spyNotifier) Events() []alerting.NotificationEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]alerting.NotificationEvent, len(s.events))
+	copy(out, s.events)
+	return out
+}
+
+// driveToFiring runs two evaluate cycles on the given evaluator:
+// first with 'firingValue' data to push state to FIRING.
+// Returns after the second evaluate call.
+func driveToFiring(e *alerting.Evaluator, q *fakeQuerier, firingValue float64) {
+	q.queryFn = func(_ context.Context, _ storage.QueryParams) ([]storage.QueryPoint, error) {
+		return []storage.QueryPoint{{Value: firingValue}}, nil
+	}
+	e.EvaluateForTest(context.Background())
+}
+
+func TestEvaluator_WithNotifiers_FiringTransition(t *testing.T) {
+	rule := alerting.Rule{Host: "web-01", Name: "cpu.usage_pct", Op: alerting.OpGT, Threshold: 90.0, For: 5 * time.Minute}
+	spy := &spyNotifier{}
+	q := &fakeQuerier{}
+
+	e := alerting.NewEvaluator([]alerting.Rule{rule}, q, nil, alerting.WithNotifiers([]alerting.Notifier{spy}))
+
+	// Drive to FIRING (value > 90 threshold)
+	driveToFiring(e, q, 95.0)
+
+	// Allow goroutines to complete
+	time.Sleep(50 * time.Millisecond)
+
+	events := spy.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 notification event, got %d", len(events))
+	}
+	if events[0].Event != "firing" {
+		t.Errorf("expected event='firing', got %q", events[0].Event)
+	}
+	if events[0].Rule.Name != rule.Name {
+		t.Errorf("expected rule.Name=%q, got %q", rule.Name, events[0].Rule.Name)
+	}
+}
+
+func TestEvaluator_WithNotifiers_ResolvedTransition(t *testing.T) {
+	rule := alerting.Rule{Host: "web-01", Name: "cpu.usage_pct", Op: alerting.OpGT, Threshold: 90.0, For: 5 * time.Minute}
+	spy := &spyNotifier{}
+	callCount := 0
+	q := &fakeQuerier{
+		queryFn: func(_ context.Context, _ storage.QueryParams) ([]storage.QueryPoint, error) {
+			callCount++
+			if callCount == 1 {
+				return []storage.QueryPoint{{Value: 95.0}}, nil // FIRING
+			}
+			return []storage.QueryPoint{{Value: 80.0}}, nil // RESOLVED
+		},
+	}
+
+	e := alerting.NewEvaluator([]alerting.Rule{rule}, q, nil, alerting.WithNotifiers([]alerting.Notifier{spy}))
+
+	e.EvaluateForTest(context.Background())
+	time.Sleep(50 * time.Millisecond)
+	e.EvaluateForTest(context.Background())
+	time.Sleep(50 * time.Millisecond)
+
+	events := spy.Events()
+	if len(events) != 2 {
+		t.Fatalf("expected 2 notification events (firing + resolved), got %d: %v", len(events), events)
+	}
+	if events[0].Event != "firing" {
+		t.Errorf("expected first event='firing', got %q", events[0].Event)
+	}
+	if events[1].Event != "resolved" {
+		t.Errorf("expected second event='resolved', got %q", events[1].Event)
+	}
+}
+
+func TestEvaluator_WithNotifiers_PendingNoNotify(t *testing.T) {
+	rule := alerting.Rule{Host: "web-01", Name: "cpu.usage_pct", Op: alerting.OpGT, Threshold: 90.0, For: 5 * time.Minute}
+	spy := &spyNotifier{}
+	q := &fakeQuerier{
+		queryFn: func(_ context.Context, _ storage.QueryParams) ([]storage.QueryPoint, error) {
+			// Value below threshold — stays OK/never fires
+			return []storage.QueryPoint{{Value: 50.0}}, nil
+		},
+	}
+
+	e := alerting.NewEvaluator([]alerting.Rule{rule}, q, nil, alerting.WithNotifiers([]alerting.Notifier{spy}))
+	e.EvaluateForTest(context.Background())
+	time.Sleep(50 * time.Millisecond)
+
+	events := spy.Events()
+	if len(events) != 0 {
+		t.Errorf("expected 0 notify calls for non-firing state, got %d: %v", len(events), events)
+	}
+}
+
+func TestEvaluator_NoNotifiers_Unchanged(t *testing.T) {
+	// Zero-notifiers path: existing behavior must be preserved with no side effects.
+	rule := alerting.Rule{Host: "web-01", Name: "cpu.usage_pct", Op: alerting.OpGT, Threshold: 90.0, For: 5 * time.Minute}
+	q := &fakeQuerier{
+		queryFn: func(_ context.Context, _ storage.QueryParams) ([]storage.QueryPoint, error) {
+			return []storage.QueryPoint{{Value: 95.0}}, nil
+		},
+	}
+
+	// No WithNotifiers — must compile and behave as before
+	e := alerting.NewEvaluator([]alerting.Rule{rule}, q, nil)
+	e.EvaluateForTest(context.Background())
+
+	alerts := e.ActiveAlerts()
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if alerts[0].State != alerting.StateFiring {
+		t.Fatalf("expected StateFiring, got %v", alerts[0].State)
+	}
+}

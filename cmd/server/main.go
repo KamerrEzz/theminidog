@@ -61,6 +61,13 @@ func main() {
 	repo := storage.NewMetricRepository(pool)
 	logRepo := storage.NewLogRepository(pool)
 
+	// Parse alert notifications (optional; empty = disabled).
+	notifiers, err := alerting.ParseNotifications(cfg.AlertNotifications)
+	if err != nil {
+		slog.Error("invalid ALERT_NOTIFICATIONS", "err", err)
+		os.Exit(1)
+	}
+
 	// Parse alert rules and conditionally create the evaluator.
 	var evaluator *alerting.Evaluator
 	if cfg.AlertRules != "" {
@@ -70,7 +77,7 @@ func main() {
 			os.Exit(1)
 		}
 		if len(rules) > 0 {
-			evaluator = alerting.NewEvaluator(rules, repo, log)
+			evaluator = alerting.NewEvaluator(rules, repo, log, alerting.WithNotifiers(notifiers))
 		}
 	}
 
