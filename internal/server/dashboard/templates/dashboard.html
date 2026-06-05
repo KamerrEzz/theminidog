@@ -146,8 +146,9 @@ function refreshAlerts() {
       badge.innerHTML = '<span style="color:var(--red)">🔴 ' + firing.length + ' firing</span>';
       banner.classList.add("visible");
       list.innerHTML = firing.map(function(a) {
+        var alertLabel = LABELS[a.rule.Name] || a.rule.Name;
         return '<div class="alert-row"><span class="badge-firing">firing</span>' +
-          '<strong>' + esc(a.rule.Name) + '</strong>' +
+          '<strong>' + esc(alertLabel) + '</strong>' +
           '<span style="color:var(--muted)">' + esc(a.rule.Op) + ' ' + a.rule.Threshold +
           ' &nbsp;|&nbsp; actual: <strong style="color:var(--red)">' + a.value.toFixed(2) + '%</strong>' +
           ' &nbsp;|&nbsp; host: ' + esc(a.rule.Host) + '</span></div>';
@@ -160,6 +161,17 @@ function refreshAlerts() {
 }
 
 // ── Metrics
+var LABELS = {
+  "cpu.usage_pct":   "CPU Usage",
+  "mem.used_pct":    "Memory Used",
+  "mem.used_bytes":  "Memory Used",
+  "mem.total_bytes": "Total Memory",
+  "disk.used_pct":   "Disk Usage",
+  "disk.used_bytes": "Disk Used",
+  "disk.total_bytes":"Total Disk",
+  "net.bytes_in":    "Network In",
+  "net.bytes_out":   "Network Out",
+};
 var UNITS = {
   "cpu.usage_pct":"%","mem.used_pct":"%","disk.used_pct":"%",
   "mem.used_bytes":"B","mem.total_bytes":"B","disk.used_bytes":"B","disk.total_bytes":"B",
@@ -192,8 +204,9 @@ function refreshMetrics() {
           (diff > 0) === isHighBad ? "trend-up" : "trend-down";
         var trendIcon = Math.abs(diff) < last*0.02 ? "→ stable" :
           diff > 0 ? "↑ rising" : "↓ falling";
+        var label = LABELS[s.name] || s.name;
         return '<div class="metric-card">' +
-          '<div class="metric-name">' + esc(s.name) + '</div>' +
+          '<div class="metric-name">' + esc(label) + '<span style="color:#334155;margin-left:6px;font-size:10px">' + esc(s.name) + '</span></div>' +
           '<div class="metric-value">' + fmt(s.name, last) + '</div>' +
           '<div class="metric-trend ' + trendClass + '">' + trendIcon + '</div>' +
           '<div class="metric-chart">' + sparkline(vals) + '</div>' +
