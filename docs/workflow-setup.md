@@ -344,7 +344,7 @@ git add docs/ && git commit -m "docs: add my-page" && git push
 | `DOCKERHUB_TOKEN` | Docker Hub → Account Settings → Security → New Access Token | Password for `docker push` (use a token, not your account password) |
 | `MINIOBSERV_NPM_TOKEN` | npmjs.com → Access Tokens → Generate New Token → **Classic** → **Automation** | Publishes to npm — must be an Automation token to bypass 2FA in CI |
 
-Add secrets at: `github.com/<your-org>/<repo>/settings/secrets/actions`
+Add secrets at: `github.com/KamerrEzz/theminidog/settings/secrets/actions`
 
 **GitHub Pages does not need a secret.** The `id-token: write` permission in `docs.yml` handles authentication via OIDC automatically.
 

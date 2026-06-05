@@ -1,6 +1,6 @@
 # @kamerrezz/miniobserv
 
-JavaScript/TypeScript SDK for [MiniObserv](https://github.com/your-org/theminidog) — a lightweight metrics ingestion and query server.
+JavaScript/TypeScript SDK for [MiniObserv](https://github.com/KamerrEzz/theminidog) — a lightweight observability platform for metrics, logs, alerts, and host health.
 
 - Zero runtime dependencies (Node.js built-ins only: `node:crypto` + native `fetch`)
 - Full TypeScript types
