@@ -5,9 +5,6 @@ hero:
   name: "MiniObserv"
   text: "Self-hosted observability"
   tagline: Collect metrics and logs from your servers, store them in TimescaleDB, fire alerts, and monitor everything from a live dashboard. Built in Go 1.23+.
-  image:
-    src: /dashboard-preview.svg
-    alt: MiniObserv dashboard
   actions:
     - theme: brand
       text: Quick Start →
