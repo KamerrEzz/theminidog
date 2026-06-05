@@ -237,6 +237,32 @@ func TestLoadAgent_LogPaths_EmptyString_ReturnsNil(t *testing.T) {
 	}
 }
 
+// ── AGENT_TOKEN ──────────────────────────────────────────────────────────────
+
+func TestLoadAgent_AgentToken_Present_PopulatesField(t *testing.T) {
+	t.Setenv("SERVER_URL", "http://localhost:8080")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-here")
+	cfg, err := LoadAgent()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AgentToken != "my-secret-token-here" {
+		t.Errorf("expected AgentToken=my-secret-token-here, got: %q", cfg.AgentToken)
+	}
+}
+
+func TestLoadAgent_AgentToken_Absent_EmptyString_NoError(t *testing.T) {
+	t.Setenv("SERVER_URL", "http://localhost:8080")
+	t.Setenv("AGENT_TOKEN", "")
+	cfg, err := LoadAgent()
+	if err != nil {
+		t.Fatalf("unexpected error when AGENT_TOKEN unset: %v", err)
+	}
+	if cfg.AgentToken != "" {
+		t.Errorf("expected AgentToken empty, got: %q", cfg.AgentToken)
+	}
+}
+
 // ── Defaults hardcoded ───────────────────────────────────────────────────────
 
 func TestLoadAgent_Defaults_SendTimeout_10s(t *testing.T) {

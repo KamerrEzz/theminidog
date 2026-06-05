@@ -12,6 +12,7 @@ import (
 type AgentConfig struct {
 	ServerURL       *url.URL
 	AgentHost       string
+	AgentToken      string
 	CollectInterval time.Duration
 	SendTimeout     time.Duration
 	DiskMounts      []string
@@ -63,9 +64,13 @@ func LoadAgent() (AgentConfig, error) {
 		}
 	}
 
+	agentToken := os.Getenv("AGENT_TOKEN")
+	// optional — empty is valid
+
 	return AgentConfig{
 		ServerURL:       u,
 		AgentHost:       host,
+		AgentToken:      agentToken,
 		CollectInterval: interval,
 		SendTimeout:     10 * time.Second,
 		DiskMounts:      nil,
