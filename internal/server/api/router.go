@@ -39,9 +39,8 @@ func NewRouter(
 		r.Get("/api/v1/dashboard/metrics", dash.HandleDashboardMetrics)
 		r.Get("/api/v1/dashboard/logs", dash.HandleDashboardLogs)
 	}
-	if alerter != nil {
-		r.Get("/api/v1/alerts", handleAlerts(alerter))
-	}
+	// Always register alerts endpoint — handler is nil-safe (returns [] when no evaluator)
+	r.Get("/api/v1/alerts", handleAlerts(alerter))
 
 	r.Group(func(r chi.Router) {
 		r.Use(JWTMiddleware(jwtSecret))
