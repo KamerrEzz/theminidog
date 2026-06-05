@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="30">
+  <title>MiniObserv Dashboard</title>
+  <style>
+    body { font-family: monospace; margin: 20px; background: #f8f8f8; color: #222; }
+    h1 { color: #333; }
+    .firing { background: #fdd; border: 1px solid #c00; padding: 4px 8px; color: #900; }
+    .ok     { background: #dfd; border: 1px solid #090; padding: 4px 8px; color: #060; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    th { background: #eee; }
+    .level-error { color: #c00; font-weight: bold; }
+    .level-warn  { color: #a60; }
+    .level-info  { color: #060; }
+    .level-debug { color: #999; }
+    .bar { font-family: monospace; letter-spacing: -1px; }
+    .section { background: #fff; border: 1px solid #ddd; margin: 16px 0; padding: 16px; }
+    .no-data { color: #999; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>MiniObserv</h1>
+  <p>Auto-refreshes every 30 seconds.</p>
+
+  <div class="section">
+    <h2>Active Alerts</h2>
+    <div id="alerts-container">
+      {{if .Alerts}}
+      <table>
+        <tr><th>Host</th><th>Metric</th><th>Condition</th><th>State</th><th>Value</th><th>Since</th></tr>
+        {{range .Alerts}}
+        <tr>
+          <td>{{.Rule.Host}}</td>
+          <td>{{.Rule.Name}}</td>
+          <td>{{.Rule.Op}} {{.Rule.Threshold}}</td>
+          <td class="{{if eq (print .State) "firing"}}firing{{else}}ok{{end}}">{{.State}}</td>
+          <td>{{printf "%.2f" .Value}}</td>
+          <td>{{.UpdatedAt.Format "15:04:05"}}</td>
+        </tr>
+        {{end}}
+      </table>
+      {{else}}
+      <p class="no-data">No active alerts.</p>
+      {{end}}
+    </div>
+  </div>
+
+  {{range .Hosts}}
+  <div class="section" data-host="{{.}}">
+    <h2>Host: {{.}}</h2>
+    <h3>Metrics (last 30 min)</h3>
+    <div class="metrics-container" id="metrics-{{.}}"><p class="no-data">Loading...</p></div>
+    <h3>Recent Logs</h3>
+    <div class="logs-container" id="logs-{{.}}"><p class="no-data">Loading...</p></div>
+  </div>
+  {{end}}
+
+  {{if not .Hosts}}
+  <div class="section">
+    <p class="no-data">No hosts reporting metrics yet. Start the agent to collect data.</p>
+  </div>
+  {{end}}
+
+<script>
+const metricNames = [
+  "cpu.usage_pct","mem.used_pct","mem.used_bytes","mem.total_bytes",
+  "disk.used_pct","disk.used_bytes","disk.total_bytes","net.bytes_in","net.bytes_out"
+];
+
+function bar(value, max) {
+  if (max === 0) return "░░░░░░░░░░";
+  const filled = Math.round((value / max) * 10);
+  return "█".repeat(Math.min(filled, 10)) + "░".repeat(Math.max(10 - filled, 0));
+}
+
+function renderMetrics(host, data) {
+  const el = document.getElementById("metrics-" + host);
+  if (!data || !data.series || data.series.length === 0) {
+    el.innerHTML = '<p class="no-data">No metric data available.</p>';
+    return;
+  }
+  let html = "<table><tr><th>Metric</th><th>Latest</th><th>Chart (last 30m)</th></tr>";
+  for (const s of data.series) {
+    if (!s.points || s.points.length === 0) continue;
+    const latest = s.points[s.points.length - 1].value;
+    const max = Math.max(...s.points.map(p => p.value));
+    const chartBars = s.points.slice(-20).map(p => bar(p.value, max)).join(" ");
+    html += `<tr><td>${escHtml(s.name)}</td><td>${latest.toFixed(2)}</td><td class="bar">${chartBars}</td></tr>`;
+  }
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+function renderLogs(host, data) {
+  const el = document.getElementById("logs-" + host);
+  if (!data || !data.entries || data.entries.length === 0) {
+    el.innerHTML = '<p class="no-data">No logs available.</p>';
+    return;
+  }
+  let html = "<table><tr><th>Time</th><th>Level</th><th>Path</th><th>Message</th></tr>";
+  for (const e of data.entries) {
+    const t = new Date(e.time).toLocaleTimeString();
+    const cls = "level-" + escHtml(e.level);
+    html += `<tr><td>${t}</td><td class="${cls}">${escHtml(e.level)}</td><td>${escHtml(e.path)}</td><td>${escHtml(e.message)}</td></tr>`;
+  }
+  html += "</table>";
+  el.innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+async function refreshHost(host) {
+  try {
+    const [mRes, lRes] = await Promise.all([
+      fetch("/api/v1/dashboard/metrics?host=" + encodeURIComponent(host) + "&window=30m"),
+      fetch("/api/v1/dashboard/logs?host=" + encodeURIComponent(host) + "&limit=50")
+    ]);
+    if (mRes.ok) renderMetrics(host, await mRes.json());
+    if (lRes.ok) renderLogs(host, await lRes.json());
+  } catch(e) {
+    console.error("refresh error for host " + host, e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll("[data-host]").forEach(function(el) {
+    refreshHost(el.dataset.host);
+  });
+});
+</script>
+</body>
+</html>
