@@ -24,6 +24,12 @@ const enSidebar = [
       { text: 'Express / NestJS / Next.js', link: '/integration-guide' },
     ],
   },
+  {
+    text: 'Behind the scenes',
+    items: [
+      { text: 'Workflows & CI/CD', link: '/workflow-setup' },
+    ],
+  },
 ]
 
 const esSidebar = [
@@ -48,6 +54,12 @@ const esSidebar = [
     text: 'Integraciones',
     items: [
       { text: 'Express / NestJS / Next.js', link: '/es/guia-integracion' },
+    ],
+  },
+  {
+    text: 'Detrás del proyecto',
+    items: [
+      { text: 'Workflows y CI/CD', link: '/es/configuracion-workflows' },
     ],
   },
 ]
