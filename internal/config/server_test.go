@@ -150,6 +150,76 @@ func TestLoadServerConfig_RequestTimeout_ValidValue_Accepted(t *testing.T) {
 	}
 }
 
+func TestLoadServerConfig_AlertRules_Set_ReturnsValue(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")
+	t.Setenv("ALERT_RULES", "[]")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AlertRules != "[]" {
+		t.Errorf("expected AlertRules=\"[]\", got %q", cfg.AlertRules)
+	}
+}
+
+func TestLoadServerConfig_AlertRules_Unset_ReturnsEmpty(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")
+	t.Setenv("ALERT_RULES", "")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AlertRules != "" {
+		t.Errorf("expected AlertRules=\"\", got %q", cfg.AlertRules)
+	}
+}
+
+func TestLoadServerConfig_DashboardEnabled_DefaultTrue(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")
+	t.Setenv("DASHBOARD_ENABLED", "")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.DashboardEnabled {
+		t.Error("expected DashboardEnabled=true when env is unset")
+	}
+}
+
+func TestLoadServerConfig_DashboardEnabled_FalseString(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")
+	t.Setenv("DASHBOARD_ENABLED", "false")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DashboardEnabled {
+		t.Error("expected DashboardEnabled=false when env is \"false\"")
+	}
+}
+
+func TestLoadServerConfig_DashboardEnabled_ZeroString(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/db")
+	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")
+	t.Setenv("DASHBOARD_ENABLED", "0")
+
+	cfg, err := LoadServerConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DashboardEnabled {
+		t.Error("expected DashboardEnabled=false when env is \"0\"")
+	}
+}
+
 func TestLoadServerConfig_AllOptionalAbsent_CorrectDefaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://localhost/db")
 	t.Setenv("AGENT_TOKEN", "my-secret-token-abc")

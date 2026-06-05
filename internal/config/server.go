@@ -17,6 +17,8 @@ type ServerConfig struct {
 	LogLevel        string
 	RequestTimeout  time.Duration
 	ShutdownTimeout time.Duration
+	AlertRules      string // raw JSON from ALERT_RULES; "" = alerting disabled
+	DashboardEnabled bool  // from DASHBOARD_ENABLED; default true
 }
 
 // LoadServerConfig reads ServerConfig from environment variables.
@@ -57,14 +59,25 @@ func LoadServerConfig() (ServerConfig, error) {
 	reqTimeout := parseDuration(os.Getenv("REQUEST_TIMEOUT"), 10*time.Second, time.Second, 120*time.Second)
 	shutdownTimeout := parseDuration(os.Getenv("SHUTDOWN_TIMEOUT"), 5*time.Second, time.Second, 30*time.Second)
 
+	// ALERT_RULES: raw JSON string; empty string means alerting is disabled.
+	alertRules := os.Getenv("ALERT_RULES")
+
+	// DASHBOARD_ENABLED: default true; explicitly disabled when value is "false" or "0".
+	dashEnabled := true
+	if v := strings.ToLower(os.Getenv("DASHBOARD_ENABLED")); v == "false" || v == "0" {
+		dashEnabled = false
+	}
+
 	return ServerConfig{
-		ListenAddr:      listenAddr,
-		DatabaseURL:     dbURL,
-		AgentToken:      token,
-		MigrationsPath:  migrationsPath,
-		LogLevel:        logLevel,
-		RequestTimeout:  reqTimeout,
-		ShutdownTimeout: shutdownTimeout,
+		ListenAddr:       listenAddr,
+		DatabaseURL:      dbURL,
+		AgentToken:       token,
+		MigrationsPath:   migrationsPath,
+		LogLevel:         logLevel,
+		RequestTimeout:   reqTimeout,
+		ShutdownTimeout:  shutdownTimeout,
+		AlertRules:       alertRules,
+		DashboardEnabled: dashEnabled,
 	}, nil
 }
 
