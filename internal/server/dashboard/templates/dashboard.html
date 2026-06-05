@@ -2,138 +2,253 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="30">
-  <title>MiniObserv Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiniObserv</title>
   <style>
-    body { font-family: monospace; margin: 20px; background: #f8f8f8; color: #222; }
-    h1 { color: #333; }
-    .firing { background: #fdd; border: 1px solid #c00; padding: 4px 8px; color: #900; }
-    .ok     { background: #dfd; border: 1px solid #090; padding: 4px 8px; color: #060; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
-    th { background: #eee; }
-    .level-error { color: #c00; font-weight: bold; }
-    .level-warn  { color: #a60; }
-    .level-info  { color: #060; }
-    .level-debug { color: #999; }
-    .bar { font-family: monospace; letter-spacing: -1px; }
-    .section { background: #fff; border: 1px solid #ddd; margin: 16px 0; padding: 16px; }
-    .no-data { color: #999; font-style: italic; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+      --text: #e2e8f0; --muted: #64748b; --accent: #6366f1;
+      --green: #22c55e; --yellow: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui,-apple-system,sans-serif; font-size: 14px; min-height: 100vh; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+    .logo { font-size:18px; font-weight:700; letter-spacing:-.5px; }
+    .logo span { color:var(--accent); }
+    #status-bar { display:flex; align-items:center; gap:16px; color:var(--muted); font-size:12px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .main { display:grid; grid-template-columns:220px 1fr; min-height:calc(100vh - 53px); }
+    aside { background:var(--surface); border-right:1px solid var(--border); padding:16px 0; }
+    .sidebar-label { padding:8px 16px 4px; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+    .host-item { display:flex; align-items:center; gap:8px; padding:8px 16px; cursor:pointer; transition:background .15s; }
+    .host-item:hover, .host-item.active { background:rgba(99,102,241,.15); }
+    .h-dot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+    .host-label { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .content { padding:20px 24px; overflow:auto; }
+    #alert-banner { display:none; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); border-radius:8px; padding:12px 16px; margin-bottom:20px; }
+    #alert-banner.visible { display:block; animation:pop .25s ease; }
+    @keyframes pop { from{transform:scaleY(.95);opacity:0} to{transform:scaleY(1);opacity:1} }
+    .alert-title { color:var(--red); font-weight:600; font-size:13px; margin-bottom:8px; }
+    .alert-row { display:flex; align-items:center; gap:10px; margin-top:6px; font-size:13px; }
+    .badge-firing { background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:100px; text-transform:uppercase; letter-spacing:.06em; animation:badgePulse 1.5s infinite; }
+    @keyframes badgePulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+    .section-title { font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px; }
+    .metric-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-bottom:24px; }
+    .metric-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+    .metric-name { font-size:11px; color:var(--muted); font-family:monospace; margin-bottom:4px; }
+    .metric-value { font-size:24px; font-weight:700; line-height:1.1; }
+    .metric-trend { font-size:11px; margin-top:3px; }
+    .trend-up{color:var(--red)} .trend-down{color:var(--green)} .trend-flat{color:var(--muted)}
+    .metric-chart { margin-top:10px; height:42px; }
+    svg.sparkline { width:100%; height:100%; overflow:visible; }
+    .sp-line { fill:none; stroke:var(--accent); stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+    .sp-area { fill:url(#areaGrad); }
+    .logs-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    table.logs { width:100%; border-collapse:collapse; font-size:12px; }
+    table.logs th { text-align:left; color:var(--muted); font-weight:500; padding:8px 12px; border-bottom:1px solid var(--border); background:rgba(255,255,255,.02); }
+    table.logs td { padding:5px 12px; border-bottom:1px solid rgba(255,255,255,.04); font-family:monospace; vertical-align:top; }
+    table.logs tr:hover td { background:rgba(255,255,255,.03); }
+    .l-error{color:var(--red)} .l-warn{color:var(--yellow)} .l-info{color:var(--muted)} .l-debug{color:#475569}
+    .l-msg { max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+    .empty { color:var(--muted); padding:32px; text-align:center; }
+    ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
   </style>
 </head>
 <body>
-  <h1>MiniObserv</h1>
-  <p>Auto-refreshes every 30 seconds.</p>
+<header>
+  <div class="logo">Mini<span>Observ</span></div>
+  <div id="status-bar">
+    <div class="dot"></div>
+    <span id="last-update">connecting…</span>
+    <span id="alert-badge"></span>
+  </div>
+</header>
 
-  <div class="section">
-    <h2>Active Alerts</h2>
-    <div id="alerts-container">
-      {{if .Alerts}}
-      <table>
-        <tr><th>Host</th><th>Metric</th><th>Condition</th><th>State</th><th>Value</th><th>Since</th></tr>
-        {{range .Alerts}}
-        <tr>
-          <td>{{.Rule.Host}}</td>
-          <td>{{.Rule.Name}}</td>
-          <td>{{.Rule.Op}} {{.Rule.Threshold}}</td>
-          <td class="{{if eq (print .State) "firing"}}firing{{else}}ok{{end}}">{{.State}}</td>
-          <td>{{printf "%.2f" .Value}}</td>
-          <td>{{.UpdatedAt.Format "15:04:05"}}</td>
-        </tr>
-        {{end}}
-      </table>
+<div class="main">
+  <aside>
+    <div class="sidebar-label">Hosts</div>
+    <div id="host-list">
+      {{range .Hosts}}
+      <div class="host-item" data-host="{{.}}" onclick="selectHost('{{.}}')">
+        <div class="h-dot"></div>
+        <div class="host-label" title="{{.}}">{{.}}</div>
+      </div>
       {{else}}
-      <p class="no-data">No active alerts.</p>
+      <div class="empty" style="padding:16px;text-align:left;font-size:12px;">No hosts yet</div>
       {{end}}
     </div>
-  </div>
+  </aside>
 
-  {{range .Hosts}}
-  <div class="section" data-host="{{.}}">
-    <h2>Host: {{.}}</h2>
-    <h3>Metrics (last 30 min)</h3>
-    <div class="metrics-container" id="metrics-{{.}}"><p class="no-data">Loading...</p></div>
-    <h3>Recent Logs</h3>
-    <div class="logs-container" id="logs-{{.}}"><p class="no-data">Loading...</p></div>
+  <div class="content">
+    <div id="alert-banner"><div class="alert-title">⚠ Active Alerts</div><div id="alert-list"></div></div>
+    <div class="section-title">Metrics — <span id="metrics-host" style="color:var(--text);font-weight:400">select a host</span></div>
+    <div class="metric-grid" id="metric-grid"><div class="empty">Select a host</div></div>
+    <div class="section-title" style="margin-top:8px">Logs <span id="log-count" style="color:var(--muted);font-weight:400"></span></div>
+    <div id="log-container"><div class="empty">No log data</div></div>
   </div>
-  {{end}}
+</div>
 
-  {{if not .Hosts}}
-  <div class="section">
-    <p class="no-data">No hosts reporting metrics yet. Start the agent to collect data.</p>
-  </div>
-  {{end}}
+<svg width="0" height="0">
+  <defs>
+    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>
 
 <script>
-const metricNames = [
-  "cpu.usage_pct","mem.used_pct","mem.used_bytes","mem.total_bytes",
-  "disk.used_pct","disk.used_bytes","disk.total_bytes","net.bytes_in","net.bytes_out"
-];
+var activeHost = "";
+var refreshTimer = null;
+var lastRefresh = Date.now();
+var INTERVAL = 5000;
 
-function bar(value, max) {
-  if (max === 0) return "░░░░░░░░░░";
-  const filled = Math.round((value / max) * 10);
-  return "█".repeat(Math.min(filled, 10)) + "░".repeat(Math.max(10 - filled, 0));
-}
-
-function renderMetrics(host, data) {
-  const el = document.getElementById("metrics-" + host);
-  if (!data || !data.series || data.series.length === 0) {
-    el.innerHTML = '<p class="no-data">No metric data available.</p>';
-    return;
-  }
-  let html = "<table><tr><th>Metric</th><th>Latest</th><th>Chart (last 30m)</th></tr>";
-  for (const s of data.series) {
-    if (!s.points || s.points.length === 0) continue;
-    const latest = s.points[s.points.length - 1].value;
-    const max = Math.max(...s.points.map(p => p.value));
-    const chartBars = s.points.slice(-20).map(p => bar(p.value, max)).join(" ");
-    html += `<tr><td>${escHtml(s.name)}</td><td>${latest.toFixed(2)}</td><td class="bar">${chartBars}</td></tr>`;
-  }
-  html += "</table>";
-  el.innerHTML = html;
-}
-
-function renderLogs(host, data) {
-  const el = document.getElementById("logs-" + host);
-  if (!data || !data.entries || data.entries.length === 0) {
-    el.innerHTML = '<p class="no-data">No logs available.</p>';
-    return;
-  }
-  let html = "<table><tr><th>Time</th><th>Level</th><th>Path</th><th>Message</th></tr>";
-  for (const e of data.entries) {
-    const t = new Date(e.time).toLocaleTimeString();
-    const cls = "level-" + escHtml(e.level);
-    html += `<tr><td>${t}</td><td class="${cls}">${escHtml(e.level)}</td><td>${escHtml(e.path)}</td><td>${escHtml(e.message)}</td></tr>`;
-  }
-  html += "</table>";
-  el.innerHTML = html;
-}
-
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-}
-
-async function refreshHost(host) {
-  try {
-    const [mRes, lRes] = await Promise.all([
-      fetch("/api/v1/dashboard/metrics?host=" + encodeURIComponent(host) + "&window=30m"),
-      fetch("/api/v1/dashboard/logs?host=" + encodeURIComponent(host) + "&limit=50")
-    ]);
-    if (mRes.ok) renderMetrics(host, await mRes.json());
-    if (lRes.ok) renderLogs(host, await lRes.json());
-  } catch(e) {
-    console.error("refresh error for host " + host, e);
-  }
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-  document.querySelectorAll("[data-host]").forEach(function(el) {
-    refreshHost(el.dataset.host);
-  });
+window.addEventListener("DOMContentLoaded", function() {
+  var items = document.querySelectorAll(".host-item");
+  if (items.length) selectHost(items[0].dataset.host);
+  setInterval(refreshAlerts, INTERVAL);
+  setInterval(function() {
+    var secs = Math.round((Date.now() - lastRefresh) / 1000);
+    document.getElementById("last-update").textContent =
+      secs < 2 ? "live" : "updated " + secs + "s ago";
+  }, 1000);
 });
+
+function selectHost(host) {
+  activeHost = host;
+  document.getElementById("metrics-host").textContent = host;
+  document.querySelectorAll(".host-item").forEach(function(el) {
+    el.classList.toggle("active", el.dataset.host === host);
+  });
+  clearTimeout(refreshTimer);
+  refresh();
+}
+
+function refresh() {
+  if (!activeHost) return;
+  Promise.all([refreshMetrics(), refreshLogs(), refreshAlerts()]).then(function() {
+    lastRefresh = Date.now();
+    refreshTimer = setTimeout(refresh, INTERVAL);
+  });
+}
+
+// ── Alerts
+function refreshAlerts() {
+  return get("/api/v1/alerts").then(function(data) {
+    var alerts = data.alerts || [];
+    var firing = alerts.filter(function(a){ return a.state === "firing"; });
+    var banner = document.getElementById("alert-banner");
+    var badge  = document.getElementById("alert-badge");
+    var list   = document.getElementById("alert-list");
+
+    if (firing.length) {
+      badge.innerHTML = '<span style="color:var(--red)">🔴 ' + firing.length + ' firing</span>';
+      banner.classList.add("visible");
+      list.innerHTML = firing.map(function(a) {
+        return '<div class="alert-row"><span class="badge-firing">firing</span>' +
+          '<strong>' + esc(a.rule.Name) + '</strong>' +
+          '<span style="color:var(--muted)">' + esc(a.rule.Op) + ' ' + a.rule.Threshold +
+          ' &nbsp;|&nbsp; actual: <strong style="color:var(--red)">' + a.value.toFixed(2) + '%</strong>' +
+          ' &nbsp;|&nbsp; host: ' + esc(a.rule.Host) + '</span></div>';
+      }).join("");
+    } else {
+      badge.innerHTML = alerts.length ? '<span style="color:var(--green)">✅ all ok</span>' : '';
+      banner.classList.remove("visible");
+    }
+  });
+}
+
+// ── Metrics
+var UNITS = {
+  "cpu.usage_pct":"%","mem.used_pct":"%","disk.used_pct":"%",
+  "mem.used_bytes":"B","mem.total_bytes":"B","disk.used_bytes":"B","disk.total_bytes":"B",
+  "net.bytes_in":"B/t","net.bytes_out":"B/t"
+};
+function fmt(name, v) {
+  var u = UNITS[name] || "";
+  if (u === "B" || u === "B/t") {
+    var suffix = u === "B/t" ? "/t" : "";
+    if (v >= 1e9) return (v/1e9).toFixed(2) + " GB" + suffix;
+    if (v >= 1e6) return (v/1e6).toFixed(1) + " MB" + suffix;
+    if (v >= 1e3) return (v/1e3).toFixed(1) + " KB" + suffix;
+    return v.toFixed(0) + " B" + suffix;
+  }
+  return v.toFixed(2) + u;
+}
+
+function refreshMetrics() {
+  return get("/api/v1/dashboard/metrics?host=" + encodeURIComponent(activeHost) + "&window=5m")
+    .then(function(data) {
+      var grid = document.getElementById("metric-grid");
+      var series = (data.series || []).filter(function(s){ return s.points && s.points.length > 0; });
+      if (!series.length) { grid.innerHTML = '<div class="empty">No metric data yet</div>'; return; }
+      grid.innerHTML = series.map(function(s) {
+        var pts = s.points, vals = pts.map(function(p){ return p.value; });
+        var last = vals[vals.length-1], prev = vals.length > 1 ? vals[vals.length-2] : last;
+        var diff = last - prev;
+        var isHighBad = s.name.indexOf("cpu") >= 0 || s.name.indexOf("used") >= 0;
+        var trendClass = Math.abs(diff) < last*0.02 ? "trend-flat" :
+          (diff > 0) === isHighBad ? "trend-up" : "trend-down";
+        var trendIcon = Math.abs(diff) < last*0.02 ? "→ stable" :
+          diff > 0 ? "↑ rising" : "↓ falling";
+        return '<div class="metric-card">' +
+          '<div class="metric-name">' + esc(s.name) + '</div>' +
+          '<div class="metric-value">' + fmt(s.name, last) + '</div>' +
+          '<div class="metric-trend ' + trendClass + '">' + trendIcon + '</div>' +
+          '<div class="metric-chart">' + sparkline(vals) + '</div>' +
+          '</div>';
+      }).join("");
+    });
+}
+
+function sparkline(vals) {
+  if (vals.length < 2) return "";
+  var W = 220, H = 42;
+  var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+  var range = max - min || 1;
+  var xs = vals.map(function(_,i){ return i/(vals.length-1)*W; });
+  var ys = vals.map(function(v){ return H - ((v-min)/range)*(H-4) - 2; });
+  var line = xs.map(function(x,i){ return (i===0?"M":"L")+x.toFixed(1)+","+ys[i].toFixed(1); }).join(" ");
+  var area = line + " L"+W+","+H+" L0,"+H+" Z";
+  return '<svg class="sparkline" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">' +
+    '<path class="sp-area" d="'+area+'"/>' +
+    '<path class="sp-line" d="'+line+'"/>' +
+    '</svg>';
+}
+
+// ── Logs
+function refreshLogs() {
+  return get("/api/v1/dashboard/logs?host=" + encodeURIComponent(activeHost) + "&limit=20")
+    .then(function(data) {
+      var entries = data.entries || [];
+      var container = document.getElementById("log-container");
+      document.getElementById("log-count").textContent = "(" + entries.length + ")";
+      if (!entries.length) { container.innerHTML = '<div class="empty">No logs yet</div>'; return; }
+      var rows = entries.map(function(e) {
+        var t = new Date(e.time).toLocaleTimeString("en-US",{hour12:false});
+        var msg = e.message;
+        try {
+          var inner = JSON.parse(msg);
+          msg = [inner.method, inner.path, inner.status ? "→ "+inner.status : "", inner.duration_ms ? "("+inner.duration_ms+"ms)" : ""].filter(Boolean).join(" ");
+        } catch(_){}
+        return '<tr><td style="white-space:nowrap;color:var(--muted)">'+t+'</td>' +
+          '<td class="l-'+e.level+'" style="width:52px;text-align:center">'+e.level.toUpperCase()+'</td>' +
+          '<td class="l-msg">'+esc(msg)+'</td></tr>';
+      }).join("");
+      container.innerHTML = '<div class="logs-wrap"><table class="logs">' +
+        '<thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>' +
+        '<tbody>'+rows+'</tbody></table></div>';
+    });
+}
+
+// ── Utils
+function get(url) {
+  return fetch(url).then(function(r){ if(!r.ok) throw r.status; return r.json(); });
+}
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
 </script>
 </body>
 </html>

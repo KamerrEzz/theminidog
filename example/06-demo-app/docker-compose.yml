@@ -24,7 +24,7 @@ services:
       MIGRATIONS_PATH: "./migrations"
       LOG_LEVEL: "debug"
       DASHBOARD_ENABLED: "true"
-      ALERT_RULES: '[{"host":"*","name":"cpu.usage_pct","op":">","threshold":5.0,"for":"30s"}]'
+      ALERT_RULES: '[{"host":"*","name":"cpu.usage_pct","op":">","threshold":8.0,"for":"30s","name":"mem.used_pct"}]'
     ports:
       - "8080:8080"
     depends_on:
