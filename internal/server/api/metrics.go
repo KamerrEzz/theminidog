@@ -13,7 +13,8 @@ const maxBatchSize = 1000
 
 // HandleIngest returns a handler for POST /api/v1/metrics.
 // It decodes, validates, and persists a MetricBatch to storage.
-func HandleIngest(repo storage.MetricRepository) http.HandlerFunc {
+// tracker may be nil — Heartbeat is called only on successful inserts (nil-safe).
+func HandleIngest(repo storage.MetricRepository, tracker *storage.HostTracker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var batch model.MetricBatch
 		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
@@ -37,9 +38,10 @@ func HandleIngest(repo storage.MetricRepository) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "storage error")
 			return
 		}
+		tracker.Heartbeat(batch.Host) // nil-safe
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]int{"ingested": n})
+		json.NewEncoder(w).Encode(map[string]int{"ingested": n}) //nolint:errcheck
 	}
 }
 

@@ -81,10 +81,19 @@ func main() {
 		}
 	}
 
+	// Build the host tracker with an onDown callback that logs and notifies.
+	onDown := func(host string) {
+		slog.Warn("host down", "host", host)
+		if evaluator != nil {
+			evaluator.NotifyHostDown(host)
+		}
+	}
+	tracker := storage.NewHostTracker(cfg.HostStaleAfter, cfg.HostDownAfter, onDown)
+
 	// Build the dashboard handler when enabled.
 	var dash *dashboard.DashHandler
 	if cfg.DashboardEnabled {
-		dash = dashboard.NewDashHandler(repo, logRepo, evaluator)
+		dash = dashboard.NewDashHandler(repo, logRepo, evaluator, tracker)
 	}
 
 	// Build a clean nil interface for alerter (ADR-3: avoid typed-nil pitfall).
@@ -94,11 +103,14 @@ func main() {
 		alerter = evaluator
 	}
 
-	router := api.NewRouter(repo, logRepo, []byte(cfg.AgentToken), cfg.RequestTimeout, dash, alerter)
+	router := api.NewRouter(repo, logRepo, []byte(cfg.AgentToken), cfg.RequestTimeout, dash, alerter, tracker)
 	srv := server.New(cfg.ListenAddr, router, pool, log)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Start the host tracker background scanner.
+	go tracker.Start(ctx)
 
 	// Start the alert evaluator AFTER the signal context is created (ADR-6).
 	if evaluator != nil {

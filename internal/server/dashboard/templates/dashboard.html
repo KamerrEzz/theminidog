@@ -24,6 +24,9 @@
     .host-item { display:flex; align-items:center; gap:8px; padding:8px 16px; cursor:pointer; transition:background .15s; }
     .host-item:hover, .host-item.active { background:rgba(99,102,241,.15); }
     .h-dot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
+    .h-dot[data-status="ok"]    { background: var(--green); }
+    .h-dot[data-status="stale"] { background: var(--yellow); }
+    .h-dot[data-status="down"]  { background: var(--red); animation: none; }
     .host-label { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .content { padding:20px 24px; overflow:auto; }
     #alert-banner { display:none; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.35); border-radius:8px; padding:12px 16px; margin-bottom:20px; }
@@ -69,13 +72,22 @@
   <aside>
     <div class="sidebar-label">Hosts</div>
     <div id="host-list">
-      {{range .Hosts}}
-      <div class="host-item" data-host="{{.}}" onclick="selectHost('{{.}}')">
-        <div class="h-dot"></div>
-        <div class="host-label" title="{{.}}">{{.}}</div>
-      </div>
+      {{if .HostStatuses}}
+        {{range .HostStatuses}}
+        <div class="host-item" data-host="{{.Host}}" onclick="selectHost('{{.Host}}')">
+          <div class="h-dot" data-status="{{.Status}}"></div>
+          <div class="host-label" title="{{.Host}}">{{.Host}}</div>
+        </div>
+        {{end}}
       {{else}}
-      <div class="empty" style="padding:16px;text-align:left;font-size:12px;">No hosts yet</div>
+        {{range .Hosts}}
+        <div class="host-item" data-host="{{.}}" onclick="selectHost('{{.}}')">
+          <div class="h-dot"></div>
+          <div class="host-label" title="{{.}}">{{.}}</div>
+        </div>
+        {{else}}
+        <div class="empty" style="padding:16px;text-align:left;font-size:12px;">No hosts yet</div>
+        {{end}}
       {{end}}
     </div>
   </aside>

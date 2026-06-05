@@ -38,9 +38,10 @@ var windowDurations = map[string]time.Duration{
 }
 
 type pageData struct {
-	Hosts   []string
-	Alerts  []alerting.Alert
-	Refresh int
+	Hosts        []string
+	HostStatuses []storage.HostStatus
+	Alerts       []alerting.Alert
+	Refresh      int
 }
 
 // metricSource is the minimal metric interface the dashboard needs.
@@ -58,14 +59,16 @@ type DashHandler struct {
 	metricRepo metricSource
 	logRepo    storage.LogRepository
 	alerter    alerting.AlertReader
+	tracker    *storage.HostTracker
 }
 
 // NewDashHandler constructs a DashHandler.
 // m must implement metricSource (Query + Hosts); this is satisfied by the concrete
 // pgxMetricRepository once PR3 adds Hosts to storage.MetricRepository.
 // alerter may be a typed-nil *alerting.Evaluator — ActiveAlerts() is nil-safe.
-func NewDashHandler(m metricSource, l storage.LogRepository, a alerting.AlertReader) *DashHandler {
-	return &DashHandler{metricRepo: m, logRepo: l, alerter: a}
+// tracker may be nil — host status dots are omitted when nil.
+func NewDashHandler(m metricSource, l storage.LogRepository, a alerting.AlertReader, tracker *storage.HostTracker) *DashHandler {
+	return &DashHandler{metricRepo: m, logRepo: l, alerter: a, tracker: tracker}
 }
 
 // HandleDashboard renders the full dashboard HTML page (GET /).
@@ -82,8 +85,18 @@ func (d *DashHandler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	if alerts == nil {
 		alerts = []alerting.Alert{}
 	}
+	// Populate host statuses from the tracker (nil-safe; falls back to empty slice).
+	hostStatuses := d.tracker.All()
+	if hostStatuses == nil {
+		hostStatuses = []storage.HostStatus{}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, pageData{Hosts: hosts, Alerts: alerts, Refresh: 30}); err != nil {
+	if err := tmpl.Execute(w, pageData{
+		Hosts:        hosts,
+		HostStatuses: hostStatuses,
+		Alerts:       alerts,
+		Refresh:      30,
+	}); err != nil {
 		http.Error(w, "template error", http.StatusInternalServerError)
 	}
 }

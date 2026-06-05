@@ -47,7 +47,7 @@ func makeBatch(host string, count int) model.MetricBatch {
 
 func TestHandleIngest_ValidBatch(t *testing.T) {
 	repo := &fakeRepo{insertN: 3}
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	batch := makeBatch("web-01", 3)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics", encodeJSON(t, batch))
@@ -67,7 +67,7 @@ func TestHandleIngest_ValidBatch(t *testing.T) {
 
 func TestHandleIngest_EmptyMetrics(t *testing.T) {
 	repo := newFakeRepo()
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	batch := model.MetricBatch{Host: "web-01", Metrics: []model.Metric{}}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics", encodeJSON(t, batch))
@@ -81,7 +81,7 @@ func TestHandleIngest_EmptyMetrics(t *testing.T) {
 
 func TestHandleIngest_EmptyHost(t *testing.T) {
 	repo := newFakeRepo()
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	batch := model.MetricBatch{Host: "", Metrics: []model.Metric{makeMetric("", "cpu.usage_pct")}}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics", encodeJSON(t, batch))
@@ -95,7 +95,7 @@ func TestHandleIngest_EmptyHost(t *testing.T) {
 
 func TestHandleIngest_NaNValue(t *testing.T) {
 	repo := newFakeRepo()
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	// NaN cannot be encoded as JSON normally; use raw JSON instead
 	rawBody := `{"host":"web-01","metrics":[{"time":"` + time.Now().UTC().Format(time.RFC3339) +
@@ -113,7 +113,7 @@ func TestHandleIngest_NaNValue(t *testing.T) {
 
 func TestHandleIngest_BatchOver1000(t *testing.T) {
 	repo := newFakeRepo()
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	batch := makeBatch("web-01", 1001)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics", encodeJSON(t, batch))
@@ -131,7 +131,7 @@ func TestHandleIngest_BatchOver1000(t *testing.T) {
 
 func TestHandleIngest_RepoError(t *testing.T) {
 	repo := &fakeRepo{insertN: 0, insertErr: errors.New("db failure")}
-	handler := api.HandleIngest(repo)
+	handler := api.HandleIngest(repo, nil)
 
 	batch := makeBatch("web-01", 2)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metrics", encodeJSON(t, batch))

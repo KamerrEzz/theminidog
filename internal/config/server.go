@@ -20,6 +20,8 @@ type ServerConfig struct {
 	AlertRules           string // raw JSON from ALERT_RULES; "" = alerting disabled
 	AlertNotifications   string // raw JSON from ALERT_NOTIFICATIONS; "" = notifications disabled
 	DashboardEnabled     bool   // from DASHBOARD_ENABLED; default true
+	HostStaleAfter  time.Duration // from HOST_STALE_AFTER; default 20s
+	HostDownAfter   time.Duration // from HOST_DOWN_AFTER; default 50s
 }
 
 // LoadServerConfig reads ServerConfig from environment variables.
@@ -72,6 +74,16 @@ func LoadServerConfig() (ServerConfig, error) {
 		dashEnabled = false
 	}
 
+	// HOST_STALE_AFTER / HOST_DOWN_AFTER: fail-fast on unparseable values.
+	hostStaleAfter, err := parseDurationStrict(os.Getenv("HOST_STALE_AFTER"), 20*time.Second)
+	if err != nil {
+		return ServerConfig{}, fmt.Errorf("HOST_STALE_AFTER: %w", err)
+	}
+	hostDownAfter, err := parseDurationStrict(os.Getenv("HOST_DOWN_AFTER"), 50*time.Second)
+	if err != nil {
+		return ServerConfig{}, fmt.Errorf("HOST_DOWN_AFTER: %w", err)
+	}
+
 	return ServerConfig{
 		ListenAddr:       listenAddr,
 		DatabaseURL:      dbURL,
@@ -83,6 +95,8 @@ func LoadServerConfig() (ServerConfig, error) {
 		AlertRules:         alertRules,
 		AlertNotifications: alertNotifications,
 		DashboardEnabled:   dashEnabled,
+		HostStaleAfter:     hostStaleAfter,
+		HostDownAfter:      hostDownAfter,
 	}, nil
 }
 
@@ -97,4 +111,20 @@ func parseDuration(raw string, def, min, max time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// parseDurationStrict parses a duration string, returning the default on empty input
+// and a descriptive error on any non-empty unparseable value (fail-fast).
+func parseDurationStrict(raw string, def time.Duration) (time.Duration, error) {
+	if raw == "" {
+		return def, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %w", raw, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("duration must be positive, got %q", raw)
+	}
+	return d, nil
 }

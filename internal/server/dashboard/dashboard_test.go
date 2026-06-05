@@ -75,7 +75,7 @@ func (f *fakeAlerter) ActiveAlerts() []alerting.Alert {
 // ---------------------------------------------------------------------------
 
 func newHandler(mRepo *fakeMetricRepo, lRepo storage.LogRepository, alerter alerting.AlertReader) *dashboard.DashHandler {
-	return dashboard.NewDashHandler(mRepo, lRepo, alerter)
+	return dashboard.NewDashHandler(mRepo, lRepo, alerter, nil)
 }
 
 // ---------------------------------------------------------------------------

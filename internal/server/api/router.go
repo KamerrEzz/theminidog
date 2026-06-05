@@ -17,6 +17,7 @@ import (
 //
 // dash may be nil — if so, GET /, /api/v1/dashboard/metrics, /api/v1/dashboard/logs are not registered.
 // alerter may be nil — if so, GET /api/v1/alerts is not registered.
+// tracker may be nil — heartbeat and host-status features are disabled.
 func NewRouter(
 	metricRepo storage.MetricRepository,
 	logRepo storage.LogRepository,
@@ -24,6 +25,7 @@ func NewRouter(
 	reqTimeout time.Duration,
 	dash *dashboard.DashHandler,
 	alerter alerting.AlertReader,
+	tracker *storage.HostTracker,
 ) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -33,7 +35,7 @@ func NewRouter(
 	r.Get("/healthz", HandleHealthz())
 	r.Get("/readyz", HandleReadyz(metricRepo))
 
-	// Public routes — no JWT required (dashboard page, dashboard APIs, alerts).
+	// Public routes — no JWT required (dashboard page, dashboard APIs, alerts, hosts).
 	if dash != nil {
 		r.Get("/", dash.HandleDashboard)
 		r.Get("/api/v1/dashboard/metrics", dash.HandleDashboardMetrics)
@@ -41,10 +43,12 @@ func NewRouter(
 	}
 	// Always register alerts endpoint — handler is nil-safe (returns [] when no evaluator)
 	r.Get("/api/v1/alerts", handleAlerts(alerter))
+	// Always register hosts endpoint — handler is nil-safe (returns [] when no tracker)
+	r.Get("/api/v1/hosts", handleHosts(tracker))
 
 	r.Group(func(r chi.Router) {
 		r.Use(JWTMiddleware(jwtSecret))
-		r.Post("/api/v1/metrics", HandleIngest(metricRepo))
+		r.Post("/api/v1/metrics", HandleIngest(metricRepo, tracker))
 		r.Get("/api/v1/metrics/query", HandleQuery(metricRepo))
 		r.Post("/api/v1/logs", HandleIngestLogs(logRepo))
 		r.Get("/api/v1/logs/query", HandleQueryLogs(logRepo))
