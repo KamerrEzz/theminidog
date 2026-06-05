@@ -29,6 +29,20 @@ var validAggs = map[string]string{
 	"min": "min",
 }
 
+// validMetricNames mirrors the canonical metric names from internal/model.
+// Both sets must stay in sync when new metrics are added.
+var validMetricNames = map[string]struct{}{
+	"cpu.usage_pct":    {},
+	"mem.used_pct":     {},
+	"mem.used_bytes":   {},
+	"mem.total_bytes":  {},
+	"disk.used_pct":    {},
+	"disk.used_bytes":  {},
+	"disk.total_bytes": {},
+	"net.bytes_in":     {},
+	"net.bytes_out":    {},
+}
+
 // QueryParams defines the parameters for a metric time-bucket query.
 type QueryParams struct {
 	Host   string
@@ -46,6 +60,9 @@ func (p QueryParams) Validate() error {
 	}
 	if strings.TrimSpace(p.Name) == "" {
 		return fmt.Errorf("name is required")
+	}
+	if _, ok := validMetricNames[p.Name]; !ok {
+		return fmt.Errorf("unknown metric name %q", p.Name)
 	}
 	if _, ok := validBuckets[p.Bucket]; !ok {
 		return fmt.Errorf("invalid bucket %q: must be one of 1m,5m,15m,1h,1d", p.Bucket)
