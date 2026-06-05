@@ -10,6 +10,8 @@ import type {
   HostsResponse,
   LogQueryOptions,
   LogQueryResponse,
+  LogBatch,
+  LogLevel,
 } from './types.js';
 
 export class MiniObservClient {
@@ -143,6 +145,30 @@ export class MiniObservClient {
         limit: options?.limit?.toString(),
         cursor: options?.cursor?.toString(),
       },
+    });
+  }
+
+  /** Push a batch of log entries to the server. */
+  async pushLogs(batch: LogBatch): Promise<IngestResponse> {
+    return this.request<IngestResponse>('POST', '/api/v1/logs', { body: batch });
+  }
+
+  /** Push a single log entry (convenience wrapper). */
+  async pushLog(
+    level: LogLevel,
+    message: string,
+    options?: { source?: string; time?: Date | string }
+  ): Promise<IngestResponse> {
+    const host = this.defaultHost;
+    return this.pushLogs({
+      host,
+      entries: [{
+        time: options?.time ?? new Date().toISOString(),
+        host,
+        level,
+        message,
+        source: options?.source,
+      }],
     });
   }
 

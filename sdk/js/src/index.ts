@@ -19,6 +19,8 @@ export type {
   HostsResponse,
   LogEntry,
   LogLevel,
+  LogBatch,
+  LogEntryInput,
   LogQueryOptions,
   LogQueryResponse,
 } from './types.js';

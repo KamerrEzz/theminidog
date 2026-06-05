@@ -121,3 +121,16 @@ export interface LogQueryResponse {
   entries: LogEntry[];
   next_cursor?: number;
 }
+
+export interface LogBatch {
+  host: string;
+  entries: LogEntryInput[];
+}
+
+export interface LogEntryInput {
+  time: Date | string;
+  host: string;
+  level: LogLevel;
+  message: string;
+  source?: string;
+}
