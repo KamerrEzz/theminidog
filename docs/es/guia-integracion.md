@@ -333,7 +333,7 @@ Define las reglas de alerta como un arreglo JSON en la variable de entorno `ALER
 
 - `host: "*"` coincide con todos los hosts que reportan a este servidor
 - `for` es la duración mínima sostenida antes de que se dispare la alerta — evita ruido por picos transitorios
-- Las alertas disparadas aparecen en el dashboard; la entrega por webhook aún no está implementada
+- Las alertas disparadas aparecen en el dashboard; configura `ALERT_NOTIFICATIONS` para recibir también notificaciones por webhook (ver [Sección 8](#8-notificaciones-y-salud-de-hosts))
 
 Un punto de partida práctico para una API Node.js típica:
 
@@ -342,6 +342,68 @@ Un punto de partida práctico para una API Node.js típica:
 | `cpu.usage_pct` | 80% | 5m | Carga sostenida, no un pico aislado |
 | `mem.used_pct` | 85% | 10m | Las fugas de memoria crecen lentamente |
 | `disk.used_pct` | 90% | 1m | El disco lleno es inmediato y fatal |
+
+---
+
+## 8. Notificaciones y salud de hosts
+
+### 8a. Notificaciones por webhook
+
+MiniObserv puede notificar a servicios externos cuando una alerta se activa o se resuelve. Establece `ALERT_NOTIFICATIONS` en el servidor con un arreglo JSON de destinos webhook:
+
+```yaml
+miniobserv:
+  environment:
+    ALERT_NOTIFICATIONS: '[{"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"}]'
+```
+
+Funciona con Slack, Discord, Teams, PagerDuty o cualquier servicio que acepte un POST con JSON. Cada notificación se entrega con un timeout de 5 segundos (dispara y olvida, sin reintentos en v1).
+
+**Formato del payload:**
+
+```json
+{"event":"firing","rule":{"host":"*","name":"mem.used_pct","op":">","threshold":85,"for":"10m"},"value":87.4,"fired_at":"2026-06-05T16:42:23Z"}
+```
+
+`event` vale `"firing"` cuando se supera el umbral y `"resolved"` cuando la métrica vuelve a estar por debajo.
+
+### 8b. Alertas automáticas de host caído
+
+El servidor registra el último heartbeat de cada agente conectado. Si un agente deja de reportar métricas — por un crash del contenedor, kill por OOM, partición de red u otro motivo — MiniObserv enviará automáticamente un webhook `host.down` una vez que el host lleve silencioso más tiempo del indicado en `HOST_DOWN_AFTER` (predeterminado: 50s).
+
+No se necesita configuración adicional más allá de establecer `ALERT_NOTIFICATIONS`. No hace falta escribir una regla de alerta para esto — el estado de los hosts se rastrea de forma automática.
+
+| Variable | Predeterminado | Significado |
+|----------|----------------|-------------|
+| `HOST_STALE_AFTER` | `20s` | El host se vuelve naranja (stale) en el dashboard |
+| `HOST_DOWN_AFTER` | `50s` | El host se vuelve rojo (down) y se dispara el webhook |
+
+Puedes consultar el estado actual de todos los hosts con `GET /api/v1/hosts` (público, sin autenticación):
+
+```bash
+curl -s http://localhost:8080/api/v1/hosts | jq .
+```
+
+### 8c. Snippet actualizado de docker-compose con notificaciones
+
+```yaml
+miniobserv:
+  build:
+    context: ./path/to/theminidog
+    dockerfile: Dockerfile.server
+  environment:
+    DATABASE_URL: "postgres://minidog:minidog@miniobserv-db:5432/miniobserv?sslmode=disable"
+    AGENT_TOKEN: "tu-secreto-de-32-caracteres-aqui"
+    ALERT_RULES: '[{"host":"*","name":"cpu.usage_pct","op":">","threshold":80,"for":"5m"},{"host":"*","name":"mem.used_pct","op":">","threshold":85,"for":"10m"}]'
+    ALERT_NOTIFICATIONS: '[{"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"}]'
+    HOST_STALE_AFTER: "20s"
+    HOST_DOWN_AFTER: "50s"
+  ports:
+    - "8080:8080"
+  depends_on:
+    miniobserv-db:
+      condition: service_healthy
+```
 
 ---
 
