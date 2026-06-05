@@ -1,0 +1,26 @@
+services:
+  stubserver:
+    build:
+      context: ..
+      dockerfile: Dockerfile.stubserver
+    ports:
+      - "8080:8080"
+    environment:
+      STUB_ADDR: ":8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  agent:
+    build:
+      context: ..
+      dockerfile: Dockerfile.agent
+    environment:
+      SERVER_URL: "http://stubserver:8080"
+      COLLECT_INTERVAL: "5s"
+      LOG_LEVEL: "debug"
+    depends_on:
+      stubserver:
+        condition: service_healthy
