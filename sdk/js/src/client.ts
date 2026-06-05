@@ -6,6 +6,10 @@ import type {
   QueryOptions,
   QueryResponse,
   MetricName,
+  AlertsResponse,
+  HostsResponse,
+  LogQueryOptions,
+  LogQueryResponse,
 } from './types.js';
 
 export class MiniObservClient {
@@ -113,6 +117,31 @@ export class MiniObservClient {
             : options.to,
         bucket: options.bucket,
         agg: options.agg,
+      },
+    });
+  }
+
+  /** Get all active and resolved alerts. No authentication required. */
+  async getAlerts(): Promise<AlertsResponse> {
+    return this.request<AlertsResponse>('GET', '/api/v1/alerts', { auth: false });
+  }
+
+  /** Get health status for all known hosts. No authentication required. */
+  async getHosts(): Promise<HostsResponse> {
+    return this.request<HostsResponse>('GET', '/api/v1/hosts', { auth: false });
+  }
+
+  /** Query log entries with optional filtering and keyset pagination. */
+  async queryLogs(options?: LogQueryOptions): Promise<LogQueryResponse> {
+    return this.request<LogQueryResponse>('GET', '/api/v1/logs/query', {
+      params: {
+        host: options?.host,
+        level: options?.level,
+        from: options?.from instanceof Date ? options.from.toISOString() : options?.from,
+        to: options?.to instanceof Date ? options.to.toISOString() : options?.to,
+        search: options?.search,
+        limit: options?.limit?.toString(),
+        cursor: options?.cursor?.toString(),
       },
     });
   }

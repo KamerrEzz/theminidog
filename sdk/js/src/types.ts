@@ -56,3 +56,68 @@ export interface MiniObservClientOptions {
   agentToken: string; // HS256 signing secret
   defaultHost?: string;
 }
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+export interface AlertRule {
+  Host: string;
+  Name: MetricName | 'host.down' | string;
+  Op: '>' | '<';
+  Threshold: number;
+  For: string; // e.g. "5m"
+}
+
+export type AlertState = 'ok' | 'pending' | 'firing';
+
+export interface Alert {
+  rule: AlertRule;
+  state: AlertState;
+  value: number;
+  updated_at: string; // ISO 8601
+}
+
+export interface AlertsResponse {
+  alerts: Alert[];
+}
+
+// ── Hosts ─────────────────────────────────────────────────────────────────────
+
+export type HostHealthStatus = 'ok' | 'stale' | 'down';
+
+export interface HostStatus {
+  host: string;
+  status: HostHealthStatus;
+  last_seen: string; // ISO 8601
+}
+
+export interface HostsResponse {
+  hosts: HostStatus[];
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+export interface LogEntry {
+  id: number;
+  time: string;
+  host: string;
+  level: LogLevel;
+  message: string;
+  source?: string;
+}
+
+export interface LogQueryOptions {
+  host?: string;
+  level?: LogLevel;
+  from?: Date | string;
+  to?: Date | string;
+  search?: string;
+  limit?: number;
+  cursor?: number; // keyset pagination: last seen id
+}
+
+export interface LogQueryResponse {
+  entries: LogEntry[];
+  next_cursor?: number;
+}
