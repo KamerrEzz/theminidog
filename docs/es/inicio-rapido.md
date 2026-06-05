@@ -66,8 +66,42 @@ make build
 | `LOG_LEVEL` | no | `info` | Nivel de log: `debug`, `info`, `warn`, `error` |
 | `REQUEST_TIMEOUT` | no | `10s` | Tiempo máximo por petición HTTP (1 s – 120 s) |
 | `SHUTDOWN_TIMEOUT` | no | `5s` | Tiempo de espera para apagado limpio (1 s – 30 s) |
+| `ALERT_NOTIFICATIONS` | no | — | Array JSON de objetos webhook. Ver sección [Notificaciones](#notificaciones). |
+| `HOST_STALE_AFTER` | no | `20s` | Tiempo tras el cual un host silencioso se marca como `stale`. Acepta duraciones Go. |
+| `HOST_DOWN_AFTER` | no | `50s` | Tiempo tras el cual un host silencioso se marca como `down` y se dispara el webhook `host.down`. |
 
 > **Importante:** `DATABASE_URL` debe usar el esquema `postgres://` o `postgresql://`. El esquema `pgx5://` es solo para el driver de migraciones interno.
+
+---
+
+## Notificaciones
+
+MiniObserv puede enviar un payload JSON por HTTP a uno o más webhooks cuando una alerta de umbral se dispara o se resuelve, y también cuando un host deja de reportar métricas durante más tiempo del definido en `HOST_DOWN_AFTER`.
+
+Configure `ALERT_NOTIFICATIONS` con un array JSON de objetos webhook:
+
+```bash
+ALERT_NOTIFICATIONS='[{"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"}]'
+```
+
+Cada webhook recibe un payload con esta forma:
+
+```json
+{"event":"firing","rule":{...},"value":10.36,"fired_at":"2026-06-05T16:42:23Z"}
+```
+
+- `event` es `"firing"` cuando se supera el umbral y `"resolved"` cuando se recupera.
+- La entrega es "fire-and-forget" con un timeout de 5 segundos; no hay reintentos en v1.
+- Compatible con cualquier webhook HTTP: Slack, Discord, Teams, PagerDuty o un endpoint propio.
+
+**Múltiples destinos:**
+
+```bash
+ALERT_NOTIFICATIONS='[
+  {"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"},
+  {"type":"webhook","url":"https://discord.com/api/webhooks/YOUR/WEBHOOK"}
+]'
+```
 
 ---
 

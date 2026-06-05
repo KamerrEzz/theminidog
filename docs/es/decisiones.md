@@ -275,6 +275,195 @@ El agente debe manejar fallos transitorios del servidor (reinicios, sobrecarga t
 
 ---
 
+## ADR-15: Opción funcional WithNotifiers en el servidor
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+La semana 5 incorporó un sistema de notificaciones mediante webhooks. Era necesario inyectar los notificadores en el servidor sin romper los 213 tests existentes que instancian el servidor directamente. Añadir un parámetro posicional al constructor habría requerido actualizar cada test.
+
+### Decisión
+
+Se añadió la opción funcional `WithNotifiers(notifiers []Notifier) ServerOption` que se pasa al constructor del servidor solo cuando está configurado. Los tests existentes no necesitan cambios.
+
+### Consecuencias
+
+- **Habilita**: extensión del servidor sin modificar la firma del constructor; los tests heredados siguen compilando sin cambios; añadir nuevos tipos de notificador (email, PagerDuty) requiere solo implementar la interfaz.
+- **Restringe**: el comportamiento de notificación es silencioso si `WithNotifiers` no se llama (correcto para tests unitarios, incorrecto si se olvida en producción).
+- **Justificación**: el patrón de opciones funcionales es la forma idiomática en Go para extender constructores con parámetros opcionales sin romper la compatibilidad.
+
+---
+
+## ADR-16: HostTracker en memoria, sin persistencia en base de datos
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+El sistema necesita saber si un host está activo, inactivo o caído. Se evaluó persistir este estado en base de datos frente a mantenerlo solo en memoria.
+
+### Decisión
+
+`HostTracker` es una estructura en memoria con un mapa `map[string]time.Time` protegido por un mutex. El heartbeat del host se actualiza en cada ingesta de métricas. No se escribe nada en la base de datos.
+
+### Consecuencias
+
+- **Habilita**: latencia cero para actualizar el estado del host; sin carga adicional en TimescaleDB; implementación simple y directamente testeable.
+- **Restringe**: el estado se pierde al reiniciar el servidor; después de un reinicio, todos los hosts aparecen como `unknown` hasta que envíen su primer batch. En producción, esto puede generar falsas alertas de `host.down` al arrancar.
+- **Justificación**: la vivacidad de un host es información efímera por naturaleza. El coste operativo de persistirla no justifica el beneficio, especialmente en v1 con un único servidor.
+
+---
+
+## ADR-17: Heartbeat del host en el handler de ingesta, no en la capa de almacenamiento
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+Había que decidir en qué punto del flujo de ingesta se actualiza el timestamp de última actividad del host: en el handler HTTP o en el repositorio de almacenamiento.
+
+### Decisión
+
+`HandleIngest` llama a `hostTracker.Heartbeat(host)` inmediatamente después de validar el batch y antes de llamar a `storage.Insert`. El repositorio no tiene conocimiento de `HostTracker`.
+
+### Consecuencias
+
+- **Habilita**: separación de responsabilidades clara; `storage` permanece enfocado en persistencia; el heartbeat se registra incluso si la inserción en base de datos falla posteriormente.
+- **Restringe**: si la validación falla antes del heartbeat, el host no se actualiza (correcto: un batch inválido no debe considerarse actividad válida).
+- **Justificación**: el seguimiento de vivacidad del host es responsabilidad de la capa de API, no de la capa de almacenamiento.
+
+---
+
+## ADR-18: Intervalos de retención fijos en v1
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+TimescaleDB permite configurar políticas de retención de datos automáticas (`add_retention_policy`). Se evaluó exponer estos intervalos como variables de entorno versus fijarlos en el código para v1.
+
+### Decisión
+
+Los intervalos de retención están definidos como constantes en el código para v1. No se exponen como variables de entorno ni como parámetros configurables.
+
+### Consecuencias
+
+- **Habilita**: despliegue simple sin configuración adicional; comportamiento predecible.
+- **Restringe**: cambiar los intervalos requiere recompilar; los operadores no pueden ajustar la retención sin modificar el código.
+- **Justificación**: exponer la retención como configuración añade superficie de API y complejidad de validación. Para v1, los valores por defecto son suficientes; la configurabilidad puede añadirse en v2 cuando se conozcan los requisitos reales.
+
+---
+
+## ADR-19: La migración de conversión a hypertable de logs es irreversible en el down
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+La migración 003 convierte la tabla `logs` en un hypertable de TimescaleDB mediante `create_hypertable`. TimescaleDB no proporciona un mecanismo para deshacer esta conversión.
+
+### Decisión
+
+El archivo `.down.sql` de la migración 003 contiene únicamente un comentario explicando que la operación es irreversible. No intenta recrear la tabla como tabla regular.
+
+### Consecuencias
+
+- **Habilita**: honestidad operativa sobre las limitaciones de TimescaleDB; evita un down migration silenciosamente roto.
+- **Restringe**: hacer rollback de la migración 003 requiere restaurar desde un backup o recrear la tabla manualmente.
+- **Justificación**: un down migration que falla silenciosamente es peor que uno que documenta explícitamente su irreversibilidad. Los operadores deben saberlo antes de aplicar la migración en producción.
+
+---
+
+## ADR-20: host.down sintético mediante notificadores, no mediante ActiveAlerts()
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+Los eventos `host.down` necesitan disparar notificaciones webhook. Se evaluó reutilizar el sistema de `ActiveAlerts()` (que evalúa reglas de umbral) para modelar el estado `down` como una alerta especial.
+
+### Decisión
+
+`HostTracker` dispara directamente los notificadores cuando detecta que un host ha superado `HOST_DOWN_AFTER`. El evento `host.down` no pasa por el sistema de alertas basado en umbrales.
+
+### Consecuencias
+
+- **Habilita**: separación clara entre alertas de métricas (umbral) y alertas de vivacidad (silencio del host); cada sistema puede evolucionar independientemente.
+- **Restringe**: los eventos `host.down` no aparecen en `GET /api/v1/alerts` si ese endpoint solo expone alertas activas de umbrales.
+- **Justificación**: el estado `down` de un host es fundamentalmente diferente a cruzar un umbral de métrica: no tiene un valor numérico, no se "resuelve" automáticamente y su origen es la ausencia de datos, no su presencia.
+
+---
+
+## ADR-21: El panel lateral itera HostStatuses con fallback a Hosts
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+El panel de control (dashboard) necesita mostrar la lista de hosts con su estado. Los datos provienen de dos fuentes posibles: `HostTracker.HostStatuses()` (estado en tiempo real) y la lista de hosts únicos conocidos en la base de datos.
+
+### Decisión
+
+El panel lateral itera primero sobre `HostStatuses()` del `HostTracker`. Si el tracker no tiene entradas (por ejemplo, tras un reinicio del servidor antes de que los agentes reporten), hace fallback a la lista de hosts distintos de la base de datos.
+
+### Consecuencias
+
+- **Habilita**: panel funcional incluso tras un reinicio del servidor; coherencia con el estado en tiempo real cuando está disponible.
+- **Restringe**: durante el período de fallback, todos los hosts aparecen sin estado (`unknown`) hasta que los agentes reporten su primer batch.
+- **Justificación**: la experiencia de usuario es mejor con una lista de hosts (aunque sin estado) que con un panel vacío.
+
+---
+
+## ADR-22: Clave primaria compuesta (id, time) requerida antes de create_hypertable en logs
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+TimescaleDB requiere que la columna de particionamiento temporal (`time`) forme parte de la clave primaria o de todos los índices únicos de la tabla antes de convertirla en hypertable. La tabla `logs` tenía originalmente solo `id` como clave primaria.
+
+### Decisión
+
+La migración 003 altera la tabla `logs` para usar una clave primaria compuesta `(id, time)` antes de llamar a `create_hypertable('logs', 'time')`.
+
+### Consecuencias
+
+- **Habilita**: conversión correcta a hypertable sin errores de restricción de unicidad.
+- **Restringe**: las referencias de clave foránea a `logs.id` deben incluir también `time` si se añaden en el futuro.
+- **Justificación**: es un requisito técnico de TimescaleDB, no una decisión de diseño. No hacerlo causa un error en tiempo de migración.
+
+---
+
+## ADR-23: context.WithoutCancel para goroutines de notificación
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+Las notificaciones webhook se envían en goroutines independientes. Si se usan directamente el contexto de la petición HTTP entrante, la goroutine de notificación se cancela en cuanto el handler de ingesta responde al cliente, antes de que el webhook pueda completar su petición HTTP de salida.
+
+### Decisión
+
+Cada goroutine de notificación recibe `context.WithoutCancel(ctx)` en lugar del contexto original. Esto desvincula el ciclo de vida de la notificación del de la petición HTTP que la originó.
+
+### Consecuencias
+
+- **Habilita**: las notificaciones se completan aunque la petición HTTP original ya haya terminado; el timeout de 5 segundos del notificador es el único límite.
+- **Restringe**: si el servidor recibe SIGTERM durante el envío de una notificación, la goroutine no se cancelará por el contexto de shutdown; se cancelará solo cuando expire su propio timeout.
+- **Justificación**: `context.WithoutCancel` es la solución correcta en Go para operaciones de "fire-and-forget" que deben completarse con independencia del contexto del llamante.
+
+---
+
 ## ADR-14: Graceful shutdown con SIGINT y timeout configurable
 
 **Estado**: Aceptado

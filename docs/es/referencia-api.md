@@ -189,7 +189,67 @@ curl -s \
 
 ---
 
-## 4. GET /healthz
+## 4. GET /api/v1/hosts
+
+Devuelve el estado de salud actual de todos los hosts conocidos por el servidor. No requiere autenticación.
+
+El servidor registra la última vez que cada host envió métricas. El estado se deriva del tiempo transcurrido desde entonces:
+
+| Estado | Condición |
+|--------|-----------|
+| `ok` | El host reportó métricas dentro del período `HOST_STALE_AFTER` (predeterminado 20 s) |
+| `stale` | Silencioso durante más de `HOST_STALE_AFTER` pero menos de `HOST_DOWN_AFTER` |
+| `down` | Silencioso durante más de `HOST_DOWN_AFTER` (predeterminado 50 s); se ha disparado el webhook `host.down` |
+
+### Autenticación
+
+No requerida.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/v1/hosts | jq .
+```
+
+### Respuesta exitosa
+
+**HTTP 200 OK**
+
+```json
+{
+  "hosts": [
+    {
+      "host": "web-01",
+      "status": "ok",
+      "last_seen": "2026-06-05T16:42:23Z"
+    },
+    {
+      "host": "web-02",
+      "status": "stale",
+      "last_seen": "2026-06-05T16:41:58Z"
+    },
+    {
+      "host": "api-01",
+      "status": "down",
+      "last_seen": "2026-06-05T16:40:10Z"
+    }
+  ]
+}
+```
+
+`hosts` es un array vacío si ningún agente ha reportado todavía.
+
+### Variables de entorno relacionadas
+
+| Variable | Predeterminado | Descripción |
+|----------|----------------|-------------|
+| `HOST_STALE_AFTER` | `20s` | Tiempo tras el cual un host silencioso se considera `stale`. Acepta duraciones Go. |
+| `HOST_DOWN_AFTER` | `50s` | Tiempo tras el cual un host silencioso se considera `down` y se dispara el webhook `host.down`. |
+| `ALERT_NOTIFICATIONS` | — | Array JSON de objetos webhook que reciben los eventos `host.down`. Ver [getting-started](../getting-started.md#notifications). |
+
+---
+
+## 6. GET /healthz
 
 Sonda de liveness. Verifica que el proceso del servidor está en ejecución.
 
@@ -220,7 +280,7 @@ curl -s http://localhost:8080/healthz
 
 ---
 
-## 5. GET /readyz
+## 7. GET /readyz
 
 Sonda de readiness. Verifica que el servidor puede atender peticiones y que la conexión con la base de datos funciona.
 
@@ -263,7 +323,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz
 
 ---
 
-## 6. Respuestas de error
+## 8. Respuestas de error
 
 Todas las respuestas de error siguen este formato JSON:
 
@@ -314,7 +374,7 @@ Todas las respuestas de error siguen este formato JSON:
 
 ---
 
-## 7. Referencia de métricas
+## 9. Referencia de métricas
 
 ### Tabla de nombres canónicos
 
@@ -343,7 +403,7 @@ Estos valores representan el **delta de bytes** desde el tick anterior, no el to
 
 ---
 
-## 8. Límites
+## 10. Límites
 
 | Límite | Valor |
 |--------|-------|

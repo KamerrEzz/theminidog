@@ -12,7 +12,6 @@ MiniObserv es una plataforma de observabilidad de infraestructura **minimalista 
 - Una solución operativa lista para ejecutarse con `docker compose up`.
 
 **Lo que no es:**
-- No es un sistema de alertas ni de visualización (no incluye Grafana ni similares).
 - No es una plataforma de trazabilidad distribuida ni de logs estructurados.
 - No está diseñado para escalado horizontal multi-instancia de servidor en esta versión.
 
@@ -46,11 +45,26 @@ MiniObserv es una plataforma de observabilidad de infraestructura **minimalista 
 │  │  JWTMiddle-  │──▶│  api.Handle-   │──▶│  storage.      │   │
 │  │  ware        │   │  Ingest /      │   │  pgxMetric-    │   │
 │  │              │   │  HandleQuery   │   │  Repository    │   │
-│  └──────────────┘   └────────────────┘   └───────┬────────┘   │
-│                                                   │            │
-│  GET /healthz  ──▶  HandleHealthz (sin auth)      │ pgx.Batch  │
-│  GET /readyz   ──▶  HandleReadyz  (sin auth)      │ pgxpool    │
-└──────────────────────────────────────────────────────────────┘
+│  └──────────────┘   └───────┬────────┘   └───────┬────────┘   │
+│                             │                     │            │
+│                             │ Heartbeat           │ pgx.Batch  │
+│                             ▼                     │ pgxpool    │
+│                    ┌────────────────┐             │            │
+│                    │  HostTracker   │──────────── │ ──────┐    │
+│                    │  (en memoria)  │             │       │    │
+│                    └───────┬────────┘             │       │    │
+│                            │ host.down            │       │    │
+│                            ▼                      │       │    │
+│                    ┌────────────────┐             │       │    │
+│                    │  Webhook-      │             │       │    │
+│                    │  Notifier      │             │       │    │
+│                    │  (goroutine)   │             │       │    │
+│                    └────────────────┘             │       │    │
+│                                                   │       │    │
+│  GET /healthz  ──▶  HandleHealthz (sin auth)      │       │    │
+│  GET /readyz   ──▶  HandleReadyz  (sin auth)      │       │    │
+│  GET /api/v1/hosts ──▶ HandleHosts (sin auth) ◀───────────┘    │
+└───────────────────────────────────────────────────────────────┘
                                                     │
                                                     ▼
                               ┌─────────────────────────────────┐
@@ -135,13 +149,19 @@ github.com/kamerrezz/theminidog/
 │       ├── api/
 │       │   ├── router.go     — registro de rutas
 │       │   ├── metrics.go    — HandleIngest, HandleQuery
+│       │   ├── hosts.go      — HandleHosts: estado de salud de hosts (GET /api/v1/hosts)
 │       │   ├── health.go     — HandleHealthz, HandleReadyz
 │       │   ├── middleware.go — JWTMiddleware HS256
 │       │   └── errors.go     — writeError: formato JSON estándar
+│       ├── alerting/
+│       │   └── notifications.go — WebhookNotifier: entrega fire-and-forget con timeout 5 s
 │       └── storage/
-│           └── metrics.go    — pgxMetricRepository: Insert (batch) y Query
+│           ├── metrics.go    — pgxMetricRepository: Insert (batch) y Query
+│           └── hosts.go      — HostTracker en memoria: Heartbeat, HostStatuses, detección de down
 ├── migrations/
-│   └── 001_create_metrics.up.sql   — extensión TimescaleDB, tabla, hypertable, índice
+│   ├── 001_create_metrics.up.sql   — extensión TimescaleDB, tabla metrics, hypertable, índice
+│   ├── 002_create_alerts.up.sql    — tabla de reglas de alerta y alertas activas
+│   └── 003_create_logs.up.sql      — tabla logs, PK compuesta (id, time), hypertable
 └── deployments/
     └── docker-compose.yml          — stack completo: TimescaleDB + servidor + agente
 ```
@@ -204,7 +224,35 @@ El repositorio usa `pgx.Batch` para enviar todas las métricas de un tick en un 
 
 ---
 
-## 6. Flujo de autenticación
+## 6. Seguimiento de hosts y notificaciones (Semana 5)
+
+### HostTracker
+
+`storage.HostTracker` mantiene en memoria el timestamp de la última actividad de cada host. El handler `HandleIngest` llama a `Heartbeat(host)` en cada ingesta exitosa.
+
+Un goroutine de vigilancia (`watchLoop`) evalúa periódicamente el estado de cada host según dos umbrales:
+
+| Umbral | Variable | Predeterminado | Estado resultante |
+|--------|----------|----------------|-------------------|
+| Tiempo sin reporte < `HOST_STALE_AFTER` | `HOST_STALE_AFTER` | `20s` | `ok` |
+| Tiempo sin reporte entre `HOST_STALE_AFTER` y `HOST_DOWN_AFTER` | — | — | `stale` |
+| Tiempo sin reporte > `HOST_DOWN_AFTER` | `HOST_DOWN_AFTER` | `50s` | `down` |
+
+Cuando un host pasa a `down`, `HostTracker` llama directamente a los notificadores registrados con un evento `host.down`. Esto es independiente del sistema de alertas por umbral de métricas.
+
+### WebhookNotifier
+
+`alerting.WebhookNotifier` implementa la interfaz `Notifier`. Recibe un evento, serializa el payload JSON y lo envía mediante POST HTTP con un timeout de 5 segundos. La entrega es "fire-and-forget": no hay reintentos en v1.
+
+Cada notificación se ejecuta en una goroutine separada con `context.WithoutCancel` para desacoplar su ciclo de vida de la petición HTTP que la originó.
+
+### Endpoint GET /api/v1/hosts
+
+`api.HandleHosts` consulta `HostTracker.HostStatuses()` y serializa el resultado. No requiere autenticación y es adecuado para sondas externas de monitoreo del estado de la flota.
+
+---
+
+## 8. Flujo de autenticación
 
 ```
 AGENT_TOKEN (secreto compartido, ≥16 chars)
@@ -224,7 +272,7 @@ Las rutas `/healthz` y `/readyz` no requieren autenticación (sondas de infraest
 
 ---
 
-## 7. Convención de nombres de métricas
+## 9. Convención de nombres de métricas
 
 MiniObserv usa un conjunto cerrado de nueve nombres canónicos. El servidor rechaza cualquier nombre fuera de esta lista con HTTP 400.
 
@@ -242,7 +290,7 @@ MiniObserv usa un conjunto cerrado de nueve nombres canónicos. El servidor rech
 
 ---
 
-## 8. Semántica de deltas en red
+## 10. Semántica de deltas en red
 
 Los contadores del sistema operativo para `net.bytes_in` y `net.bytes_out` son **acumulativos**: siempre crecen desde el arranque. MiniObserv convierte estos contadores en **deltas por intervalo**:
 
@@ -260,7 +308,7 @@ tick N+1: lee BytesRecv=1150 → delta = 1150 - 1000 = 150 bytes → emite net.b
 
 ---
 
-## 9. Referencia de configuración
+## 11. Referencia de configuración
 
 ### Agente
 
@@ -284,3 +332,6 @@ tick N+1: lee BytesRecv=1150 → delta = 1150 - 1000 = 150 bytes → emite net.b
 | `LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, `error` |
 | `REQUEST_TIMEOUT` | no | `10s` | Entre 1 s y 120 s |
 | `SHUTDOWN_TIMEOUT` | no | `5s` | Entre 1 s y 30 s |
+| `ALERT_NOTIFICATIONS` | no | — | Array JSON de objetos webhook para alertas y eventos `host.down` |
+| `HOST_STALE_AFTER` | no | `20s` | Tiempo tras el cual un host silencioso pasa a estado `stale` |
+| `HOST_DOWN_AFTER` | no | `50s` | Tiempo tras el cual un host silencioso pasa a estado `down` y se dispara el notificador |
