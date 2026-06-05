@@ -194,7 +194,7 @@ func main() {
 	if err := checkHealth(baseURL); err != nil {
 		log.Fatalf("health check failed: %v", err)
 	}
-	fmt.Println("   Server is healthy\n")
+	fmt.Println("   Server is healthy")
 
 	// ── 2. Mint JWT ────────────────────────────────────────────────────────────
 	fmt.Println("── Step 2: Mint HS256 JWT")
