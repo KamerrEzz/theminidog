@@ -57,7 +57,8 @@ func main() {
 	}
 
 	repo := storage.NewMetricRepository(pool)
-	router := api.NewRouter(repo, []byte(cfg.AgentToken), cfg.RequestTimeout)
+	logRepo := storage.NewLogRepository(pool)
+	router := api.NewRouter(repo, logRepo, []byte(cfg.AgentToken), cfg.RequestTimeout)
 	srv := server.New(cfg.ListenAddr, router, pool, log)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
