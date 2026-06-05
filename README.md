@@ -1,265 +1,303 @@
 # MiniObserv
 
-A self-hosted observability platform — a learning-grade mini Datadog — built in Go 1.23+.
-Collects system metrics (CPU, RAM, Disk, Network) from hosts, ships them to a central server,
-and persists them in TimescaleDB for querying and alerting.
+> A self-hosted, learning-grade observability platform built in Go 1.23+.
+> Collect metrics and logs from your servers, store them in TimescaleDB,
+> query them through a REST API, and monitor thresholds with a live dashboard.
 
-## Documentation
+Built as a **4-week deep dive** into how observability tools like Datadog work under the hood — no black boxes.
 
-- [Getting Started](docs/getting-started.md) — prerequisites, build, configuration, Docker Compose, troubleshooting
-- [API Reference](docs/api-reference.md) — full endpoint spec, authentication, metric names, integration examples
+---
 
-## Scope
-
-| Feature | Status |
-|---------|--------|
-| Agent — system metrics collection | ✅ Week 1 |
-| Server — metrics ingestion + TimescaleDB | ✅ Week 2 |
-| Logs — agent tailing + server ingestion | ⏳ Week 3 |
-| Dashboard + threshold alerting | ⏳ Week 4 |
-
-## Architecture
+## What it does
 
 ```
-  HOST(s)                            SERVER                      STORAGE
-┌─────────────────────┐  HTTP/JSON  ┌────────────────────┐   ┌─────────────────┐
-│       AGENT         │  (batched)  │     SERVER         │   │ PostgreSQL 17   │
-│                     │  ────────►  │                    │   │ + TimescaleDB   │
-│ collector/          │  /metrics   │ api/   (chi)       ├──►│                 │
-│   cpu, mem,         │  /logs      │ storage/ (pgx)     │   │ metrics (hyper) │
-│   disk, network     │             │ alerting/          │   │ logs   (table)  │
-│                     │             │ dashboard/         │   └─────────────────┘
-│ sender/ (backoff)   │  ◄────────  │                    │
-└─────────────────────┘   202 ack   └────────────────────┘
+  YOUR SERVERS                        MINIOBSERV SERVER              TIMESCALEDB
+  ─────────────────────               ─────────────────────          ─────────────
+  ┌─────────────┐  JWT/HTTP           ┌──────────────────┐
+  │    AGENT    │ ─────────────────►  │  chi router      │  ──────►  metrics
+  │             │  POST /metrics      │  JWT middleware   │           (hypertable)
+  │  cpu        │  POST /logs         │  ingest handlers │
+  │  memory     │                     │                  │  ──────►  logs
+  │  disk       │  ◄──────────────── │  query API        │           (BIGSERIAL)
+  │  network    │    202 Accepted     │                  │
+  │  log files  │                     │  alerting ticker │
+  └─────────────┘                     │  dashboard       │
+                                      └──────────────────┘
+                                              │
+                                         http://localhost:8080
 ```
 
-## Project Structure
+**Agent** runs on each host, collects 9 system metrics every 10s, tails log files, and ships everything via authenticated HTTP batches with exponential backoff.
 
-```
-miniobserv/
-├── cmd/
-│   ├── agent/          # Agent binary entrypoint
-│   ├── server/         # Server binary entrypoint
-│   └── stubserver/     # Stub server for local testing (no DB)
-├── internal/
-│   ├── agent/
-│   │   ├── collector/  # CPU, memory, disk, network collectors
-│   │   ├── sender/     # HTTP batch client with exponential backoff
-│   │   └── agent.go    # Collection loop + sender coordination
-│   ├── server/
-│   │   ├── api/        # HTTP router, handlers, JWT middleware
-│   │   └── storage/    # TimescaleDB repository (pgx)
-│   ├── config/         # Environment-variable driven config
-│   └── model/          # Shared types: Metric, MetricBatch
-├── migrations/         # SQL migration files (golang-migrate)
-├── deployments/
-│   └── docker-compose.yml
-├── Dockerfile.agent
-├── Dockerfile.server
-├── Dockerfile.stubserver
-├── Makefile
-└── .env.example
-```
+**Server** validates, bulk-inserts via `pgx.Batch`, exposes a time-bucket query API, evaluates threshold alert rules every 30s, and serves a live dashboard.
 
-## Prerequisites
+---
 
-- [Go 1.23+](https://go.dev/dl/)
-- [Docker + Docker Compose](https://docs.docker.com/get-docker/)
+## Features
 
-> **Windows PATH note:** if `go` is not found in your terminal, add
-> `C:\Program Files\Go\bin` to your session: `$env:PATH += ";C:\Program Files\Go\bin"`
+| | Feature | Tech |
+|---|---|---|
+| ✅ | System metrics (CPU, RAM, Disk, Network) | gopsutil/v4 |
+| ✅ | Log file tailing with rotation detection | fsnotify/v1 |
+| ✅ | TimescaleDB hypertable for time-series metrics | pgx/v5 + TimescaleDB |
+| ✅ | Keyset-paginated log query | PostgreSQL BIGSERIAL |
+| ✅ | JWT authentication (HS256, shared secret) | golang-jwt/v5 |
+| ✅ | Auto-migrations on startup | golang-migrate/v4 |
+| ✅ | Threshold alerting (>/<, any metric, any host) | in-memory evaluator |
+| ✅ | Live dashboard with SVG sparklines | html/template + //go:embed |
+| ✅ | Docker Compose full stack | multi-stage builds |
+| ✅ | TypeScript SDK (zero runtime deps) | node:crypto for JWT |
+| ✅ | 213 unit tests, strict TDD | go test ./... |
+
+---
 
 ## Quick Start
 
-### Full stack — server + TimescaleDB + agent (Docker Compose)
-
 ```bash
-# 1. Set a real secret in deployments/docker-compose.yml
-#    Replace "change-me-use-a-real-secret-min-16ch" with a strong value:
-#      openssl rand -hex 32
+git clone https://github.com/KamerrEzz/theminidog.git
+cd theminidog/deployments
 
-# 2. Start everything
-cd deployments
+# Optional: change AGENT_TOKEN to a strong secret
 docker compose up --build
 ```
 
-The server is available at `http://localhost:8080`. The agent collects every 10 seconds
-and pushes to the server inside the Docker network. Metrics appear in TimescaleDB.
+Open **http://localhost:8080** — the live dashboard appears as soon as the agent starts collecting.
 
 ```bash
-# Verify the server is up
+# Verify everything is running
 curl http://localhost:8080/healthz   # → ok
-curl http://localhost:8080/readyz    # → ok (DB is reachable)
+curl http://localhost:8080/readyz    # → ok  (DB connected)
+curl http://localhost:8080/api/v1/alerts  # → {"alerts":[]}
 ```
 
-### Agent-only against a running server
+### Demo with load generator
 
 ```bash
-export SERVER_URL=http://localhost:8080
-export AGENT_TOKEN=YOUR_SECRET_HERE
-export COLLECT_INTERVAL=10s
-go run ./cmd/agent
+cd example/06-demo-app
+docker compose up --build
+# → http://localhost:8080  (MiniObserv dashboard)
+# → http://localhost:9000  (Task API being monitored)
 ```
 
-### Development mode — stub server (no DB)
+The demo spins up a Task REST API + load generator that pushes requests every 2s.
+MiniObserv tails the app's log file and fires a `mem.used_pct > 8` alert automatically.
+
+---
+
+## Dashboard
+
+Live-updating every 5 seconds. No page reload.
+
+- Dark theme with SVG sparkline charts per metric
+- Trend indicators (↑ rising / ↓ falling / → stable)
+- Animated FIRING/OK alert badges
+- Structured log stream from tailed files
+- Human-readable metric names (CPU Usage, Memory Used, etc.)
+
+```
+┌─ MiniObserv ──────────────────── ● live  🔴 1 firing ─┐
+├─ HOSTS ──┬─────────────────────────────────────────────┤
+│          │  ⚠ Memory Used > 8 | actual: 10.36%         │
+│ ● a26af… │                                             │
+│          │  ┌────────────────┐  ┌────────────────┐     │
+│          │  │ CPU Usage      │  │ Memory Used    │     │
+│          │  │   0.70%        │  │   10.19%       │     │
+│          │  │ → stable       │  │ ↑ rising       │     │
+│          │  │ ▁▂▁▁▂▁▂▁▁     │  │ ▃▄▅▅▄▅▅▄▅▅     │     │
+│          │  └────────────────┘  └────────────────┘     │
+│          │                                             │
+│          │  Logs (20)                                  │
+│          │  16:42:31  INFO  GET /tasks → 200 (0ms)     │
+│          │  16:42:31  INFO  POST /tasks → 201 (0ms)    │
+└──────────┴─────────────────────────────────────────────┘
+```
+
+---
+
+## Alert Rules
+
+Set `ALERT_RULES` as a JSON array:
+
+```json
+[
+  {"host":"*","name":"cpu.usage_pct","op":">","threshold":80,"for":"5m"},
+  {"host":"web-01","name":"mem.used_pct","op":">","threshold":85,"for":"10m"}
+]
+```
+
+`host: "*"` evaluates the rule against all known hosts. Alerts log via `slog.Error` when firing and `slog.Info` when resolved.
+
+---
+
+## API
+
+```
+# Public (no auth)
+GET  /                              Live dashboard
+GET  /healthz                       Liveness probe
+GET  /readyz                        Readiness + DB ping
+GET  /api/v1/alerts                 Current alert states
+GET  /api/v1/dashboard/metrics      Metrics for dashboard JS
+GET  /api/v1/dashboard/logs         Logs for dashboard JS
+
+# JWT-authenticated
+POST /api/v1/metrics                Ingest metric batch
+GET  /api/v1/metrics/query          Query time-bucketed series
+POST /api/v1/logs                   Ingest log batch
+GET  /api/v1/logs/query             Filtered + paginated log search
+```
+
+Full spec → [docs/api-reference.md](docs/api-reference.md)
+
+---
+
+## TypeScript SDK
 
 ```bash
-# Terminal 1
-go run ./cmd/stubserver
-
-# Terminal 2
-export SERVER_URL=http://localhost:8080
-go run ./cmd/agent
+npm install @kamerrezz/miniobserv
 ```
 
-## API Usage
+```typescript
+import { MiniObservClient } from '@kamerrezz/miniobserv'
 
-All API endpoints require a JWT. Generate one from the shared secret:
+const client = new MiniObservClient({
+  baseUrl: 'http://localhost:8080',
+  agentToken: process.env.AGENT_TOKEN!,
+  defaultHost: 'my-app',
+})
 
-```bash
-# Install jwt-cli once
-npm install -g jwt-cli
+// Push a metric
+await client.pushMetric('cpu.usage_pct', 42.5, { core: 'total' })
 
-TOKEN=$(jwt sign --secret "YOUR_SECRET_HERE" --alg HS256 \
-  '{"iss":"miniobserv-agent","exp":'$(( $(date +%s) + 86400 ))'}'  )
+// Query last hour
+const result = await client.queryMetrics({
+  host: 'my-app',
+  name: 'cpu.usage_pct',
+  from: new Date(Date.now() - 3600_000),
+  to: new Date(),
+  bucket: '5m',
+  agg: 'avg',
+})
 ```
 
-**Push a metric manually:**
+Auto-mints 24h HS256 JWTs from your `AGENT_TOKEN` secret. Zero runtime dependencies — uses `node:crypto`.
 
-```bash
-curl -s -X POST http://localhost:8080/api/v1/metrics \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "host": "web-01",
-    "metrics": [{
-      "time":   "2026-06-05T10:00:00Z",
-      "host":   "web-01",
-      "name":   "cpu.usage_pct",
-      "value":  42.5,
-      "labels": {"core": "total"}
-    }]
-  }'
-# → {"ingested":1}
-```
-
-**Query metrics:**
-
-```bash
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/v1/metrics/query?host=web-01&name=cpu.usage_pct&from=2026-06-05T09:00:00Z&to=2026-06-05T10:00:00Z&bucket=5m&agg=avg" \
-  | jq .
-```
-
-See [docs/api-reference.md](docs/api-reference.md) for the full API contract.
+---
 
 ## Configuration
-
-All settings are loaded from environment variables.
 
 ### Agent
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVER_URL` | *(required)* | HTTP/HTTPS base URL of the server |
-| `AGENT_TOKEN` | *(required with server)* | Shared HS256 secret (min 16 chars) |
-| `COLLECT_INTERVAL` | `10s` | How often to collect metrics (1s–300s) |
-| `AGENT_HOST` | OS hostname | Label used for all metrics |
-| `LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `LOG_PATHS` | *(empty)* | Comma-separated log files to tail (Week 3) |
+|---|---|---|
+| `SERVER_URL` | required | MiniObserv server base URL |
+| `AGENT_TOKEN` | required | Shared HS256 secret (min 16 chars) |
+| `COLLECT_INTERVAL` | `10s` | Metric collection frequency |
+| `AGENT_HOST` | OS hostname | Host label for all metrics |
+| `LOG_PATHS` | — | Comma-separated log files to tail |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
 ### Server
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | *(required)* | PostgreSQL DSN (`postgres://` scheme) |
-| `AGENT_TOKEN` | *(required)* | Shared HS256 secret (min 16 chars) |
-| `LISTEN_ADDR` | `:8080` | TCP address to bind |
-| `MIGRATIONS_PATH` | `./migrations` | Path to SQL migration files |
-| `LOG_LEVEL` | `info` | Log verbosity: `debug`, `info`, `warn`, `error` |
-| `REQUEST_TIMEOUT` | `10s` | Per-request timeout (1s–120s) |
-| `SHUTDOWN_TIMEOUT` | `5s` | Graceful shutdown window (1s–30s) |
+|---|---|---|
+| `DATABASE_URL` | required | `postgres://` DSN |
+| `AGENT_TOKEN` | required | Same secret as agent |
+| `LISTEN_ADDR` | `:8080` | Bind address |
+| `ALERT_RULES` | — | JSON array of threshold rules |
+| `DASHBOARD_ENABLED` | `true` | Set `false` to disable `GET /` |
+| `MIGRATIONS_PATH` | `./migrations` | SQL migration files path |
+| `LOG_LEVEL` | `info` | Server log verbosity |
+
+---
+
+## Project Structure
+
+```
+theminidog/
+├── cmd/
+│   ├── agent/              # Agent binary
+│   └── server/             # Server binary
+├── internal/
+│   ├── agent/
+│   │   ├── collector/      # CPU, memory, disk, network (statFn injection)
+│   │   ├── logtail/        # fsnotify file tailing + ParseLevel
+│   │   └── sender/         # HTTP batch client, exponential backoff
+│   ├── server/
+│   │   ├── alerting/       # Threshold evaluator, sync.RWMutex state
+│   │   ├── api/            # chi router, JWT middleware, handlers
+│   │   ├── dashboard/      # html/template + //go:embed
+│   │   └── storage/        # pgx MetricRepository + LogRepository
+│   ├── config/             # Env-driven config (fail-fast on required)
+│   └── model/              # Metric, MetricBatch, LogEntry, LogBatch
+├── migrations/             # golang-migrate SQL files
+├── sdk/js/                 # @kamerrezz/miniobserv TypeScript SDK
+├── example/
+│   ├── 01-curl-quickstart/ # Full API lifecycle in shell
+│   ├── 02-node-push-metrics/
+│   ├── 03-node-query-dashboard/
+│   ├── 04-go-http-client/
+│   ├── 05-web-dashboard/
+│   └── 06-demo-app/        # Task API + load gen + full MiniObserv stack
+├── docs/
+│   ├── architecture.md
+│   ├── decisions.md        # 14 Architecture Decision Records
+│   ├── getting-started.md
+│   ├── api-reference.md
+│   ├── internals.md        # Guide for contributors
+│   ├── observability-concepts.md
+│   └── es/                 # All docs in Spanish
+├── Dockerfile.agent
+├── Dockerfile.server
+└── deployments/
+    └── docker-compose.yml
+```
+
+---
+
+## Documentation
+
+| Doc | Description |
+|---|---|
+| [Getting Started](docs/getting-started.md) | Prerequisites, build, Docker Compose, troubleshooting |
+| [API Reference](docs/api-reference.md) | Full endpoint spec with curl examples |
+| [Architecture](docs/architecture.md) | Component diagrams, data flow, storage design |
+| [Decisions](docs/decisions.md) | 14 ADRs explaining every non-obvious choice |
+| [Internals](docs/internals.md) | How to add collectors, endpoints, and tests |
+| [Concepts](docs/observability-concepts.md) | Observability from zero — for newcomers |
+| [Español](docs/es/) | Toda la documentación en español |
+
+---
 
 ## Development
 
 ```bash
-make build-agent   # compile agent binary → bin/agent
-make build-server  # compile server binary → bin/server
-make test          # run all unit tests
-make test-verbose  # verbose test output
-make vet           # go vet
-make tidy          # go mod tidy
-make lint          # golangci-lint (requires golangci-lint installed)
+# Run all tests
+go test ./...          # 213 tests
+
+# Build both binaries
+make build-agent
+make build-server
+
+# Run with stub server (no DB needed)
+go run ./cmd/stubserver &
+SERVER_URL=http://localhost:8080 go run ./cmd/agent
 ```
 
-Integration tests (require a running TimescaleDB) are guarded by the `integration` build tag:
+---
 
-```bash
-go test -tags=integration ./...
-```
+## How it was built
 
-## Metric Reference
-
-The agent emits the following metric names:
-
-| Name | Labels | Description |
-|------|--------|-------------|
-| `cpu.usage_pct` | `core=total\|0\|1…` | CPU usage percentage |
-| `mem.used_pct` | — | Memory used percentage |
-| `mem.used_bytes` | — | Memory used in bytes |
-| `mem.total_bytes` | — | Total memory in bytes |
-| `disk.used_pct` | `mount=/` | Disk used percentage per mount |
-| `disk.used_bytes` | `mount=/` | Disk used bytes per mount |
-| `disk.total_bytes` | `mount=/` | Disk total bytes per mount |
-| `net.bytes_in` | `iface=eth0` | Network bytes received (delta per interval) |
-| `net.bytes_out` | `iface=eth0` | Network bytes sent (delta per interval) |
-
-> `net.*` metrics are **not emitted on the first collection tick** — the agent seeds
-> cumulative counters on startup and emits deltas from the second tick onward.
-
-## HTTP API
+This project was built **spec-first** using [Spec-Driven Development (SDD)](https://gentle-ai.com/sdd):
 
 ```
-POST /api/v1/metrics        Ingest a MetricBatch
-GET  /api/v1/metrics/query  Query time-bucketed metric series
-POST /api/v1/logs           Ingest a LogBatch          (Week 3)
-GET  /api/v1/logs/query     Filtered log search        (Week 3)
-GET  /healthz               Liveness probe
-GET  /readyz                Readiness probe (DB ping)
-GET  /                      Dashboard                  (Week 4)
+explore → propose → spec → design → tasks → apply → verify
 ```
 
-See [docs/api-reference.md](docs/api-reference.md) for the complete spec.
+Each week delivered a vertical slice. Every architectural decision is documented as an ADR in [docs/decisions.md](docs/decisions.md).
 
-## Testing
+---
 
-Tests are unit-only for the agent (no real OS calls, no network, no DB).
-All collectors inject their OS stat functions for full determinism.
-The sender injects its sleep and HTTP functions for backoff testing.
+## License
 
-```bash
-make test
-# ok  github.com/kamerrezz/theminidog/internal/agent           (95 tests)
-# ok  github.com/kamerrezz/theminidog/internal/agent/collector
-# ok  github.com/kamerrezz/theminidog/internal/agent/sender
-# ok  github.com/kamerrezz/theminidog/internal/config
-# ok  github.com/kamerrezz/theminidog/internal/model
-```
-
-## Roadmap
-
-| Week | Theme | Key Components |
-|------|-------|----------------|
-| **1** ✅ | Agent metrics | `collector/*`, `sender`, `agent.go`, `cmd/agent` |
-| **2** ✅ | Server + storage | `cmd/server`, `api/metrics`, `storage/metrics`, TimescaleDB migrations, JWT auth |
-| **3** | Logs pipeline | `logtail`, `api/logs`, `storage/logs`, log rotation |
-| **4** | Dashboard + alerting | `dashboard`, `alerting`, threshold rules |
-
-### Week 2 — what shipped
-
-- **Server binary** (`cmd/server`): HTTP server with chi router, JWT middleware (HS256), structured JSON logging with slog.
-- **Ingestion endpoint** (`POST /api/v1/metrics`): validates batches, writes to TimescaleDB hypertable, returns ingested count.
-- **Query endpoint** (`GET /api/v1/metrics/query`): time-bucketed aggregation (avg/max/min) with configurable bucket size (1m–1d).
-- **Health probes** (`/healthz`, `/readyz`): liveness and readiness with DB ping.
-- **TimescaleDB migrations**: automated on server startup via golang-migrate.
-- **Docker Compose** updated to run the full stack (TimescaleDB + server + agent) with health-check ordering.
+MIT
