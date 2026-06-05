@@ -18,7 +18,9 @@ import (
 
 	"github.com/kamerrezz/theminidog/internal/config"
 	"github.com/kamerrezz/theminidog/internal/server"
+	"github.com/kamerrezz/theminidog/internal/server/alerting"
 	"github.com/kamerrezz/theminidog/internal/server/api"
+	"github.com/kamerrezz/theminidog/internal/server/dashboard"
 	"github.com/kamerrezz/theminidog/internal/server/storage"
 )
 
@@ -58,11 +60,43 @@ func main() {
 
 	repo := storage.NewMetricRepository(pool)
 	logRepo := storage.NewLogRepository(pool)
-	router := api.NewRouter(repo, logRepo, []byte(cfg.AgentToken), cfg.RequestTimeout)
+
+	// Parse alert rules and conditionally create the evaluator.
+	var evaluator *alerting.Evaluator
+	if cfg.AlertRules != "" {
+		rules, err := alerting.ParseRules(cfg.AlertRules)
+		if err != nil {
+			slog.Error("invalid ALERT_RULES", "err", err)
+			os.Exit(1)
+		}
+		if len(rules) > 0 {
+			evaluator = alerting.NewEvaluator(rules, repo, log)
+		}
+	}
+
+	// Build the dashboard handler when enabled.
+	var dash *dashboard.DashHandler
+	if cfg.DashboardEnabled {
+		dash = dashboard.NewDashHandler(repo, logRepo, evaluator)
+	}
+
+	// Build a clean nil interface for alerter (ADR-3: avoid typed-nil pitfall).
+	// The router's alerter != nil guard must see a true nil interface, not a typed nil.
+	var alerter alerting.AlertReader
+	if evaluator != nil {
+		alerter = evaluator
+	}
+
+	router := api.NewRouter(repo, logRepo, []byte(cfg.AgentToken), cfg.RequestTimeout, dash, alerter)
 	srv := server.New(cfg.ListenAddr, router, pool, log)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Start the alert evaluator AFTER the signal context is created (ADR-6).
+	if evaluator != nil {
+		go evaluator.Run(ctx)
+	}
 
 	go func() {
 		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
