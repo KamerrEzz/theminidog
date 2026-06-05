@@ -1,5 +1,5 @@
 {
-  "name": "@miniobserv/sdk",
+  "name": "@kamerrezz/miniobserv",
   "version": "0.1.0",
   "description": "JavaScript/TypeScript SDK for MiniObserv",
   "type": "module",

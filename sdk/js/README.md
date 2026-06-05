@@ -1,4 +1,4 @@
-# @miniobserv/sdk
+# @kamerrezz/miniobserv
 
 JavaScript/TypeScript SDK for [MiniObserv](https://github.com/your-org/theminidog) — a lightweight metrics ingestion and query server.
 
@@ -10,17 +10,17 @@ JavaScript/TypeScript SDK for [MiniObserv](https://github.com/your-org/theminido
 ## Installation
 
 ```bash
-npm install @miniobserv/sdk
+npm install @kamerrezz/miniobserv
 # or
-yarn add @miniobserv/sdk
+yarn add @kamerrezz/miniobserv
 # or
-pnpm add @miniobserv/sdk
+pnpm add @kamerrezz/miniobserv
 ```
 
 ## Quick start
 
 ```typescript
-import { MiniObservClient } from '@miniobserv/sdk';
+import { MiniObservClient } from '@kamerrezz/miniobserv';
 
 const client = new MiniObservClient({
   baseUrl: 'http://localhost:8080',
@@ -122,7 +122,7 @@ Returns `Promise<boolean>` — `true` if the server responds to `GET /readyz` (d
 Thrown on any non-2xx HTTP response.
 
 ```typescript
-import { MiniObservClient, MiniObservError } from '@miniobserv/sdk';
+import { MiniObservClient, MiniObservError } from '@kamerrezz/miniobserv';
 
 try {
   await client.pushMetric('cpu.usage_pct', 72.4);
@@ -173,7 +173,7 @@ import type {
   QueryResponse,
   QueryPoint,
   MiniObservClientOptions,
-} from '@miniobserv/sdk';
+} from '@kamerrezz/miniobserv';
 ```
 
 ## Build
