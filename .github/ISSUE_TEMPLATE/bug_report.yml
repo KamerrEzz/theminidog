@@ -1,0 +1,45 @@
+name: "🐛 Bug Report"
+description: "Something isn't working as expected."
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: "What happened?"
+      description: "Describe the bug. What did you expect vs what did you see?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "How to reproduce"
+      description: "Steps to reproduce the behavior."
+      placeholder: |
+        1. Set ALERT_RULES to '...'
+        2. Start the agent
+        3. Wait 30s
+        4. See error in server logs
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Go version: 1.23
+        - Docker: 27.x
+        - Deploy: docker compose / binary
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Relevant logs"
+      render: shell
+    validations:
+      required: false

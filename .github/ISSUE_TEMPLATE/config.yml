@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💬 Zeew Space Discord — learn by building"
+    url: https://zeew.space/discord
+    about: "Learning to code or want to go deeper into systems? Join the community at Zeew Space — where you build real projects from day one."
+  - name: "📖 Documentation"
+    url: https://kamerrezz.github.io/theminidog/
+    about: "Full documentation including architecture, API reference, and guides for beginners."
