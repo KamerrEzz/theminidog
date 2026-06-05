@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniObserv Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3e;
+      --accent:    #5b8dee;
+      --accent2:   #43e89e;
+      --text:      #e2e6f0;
+      --muted:     #6b7280;
+      --danger:    #ef4444;
+      --warn:      #f59e0b;
+      --radius:    8px;
+      --font:      'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+    }
+
+    /* ── Form ─────────────────────────────────────────── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .form-card .full-row {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--font);
+      padding: 8px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      align-self: flex-end;
+    }
+    button:hover  { opacity: 0.85; }
+    button:active { opacity: 0.7;  }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── Chart card ───────────────────────────────────── */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .chart-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .chart-meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    #chart-container svg {
+      display: block;
+      width: 100%;
+    }
+
+    /* Axis & grid lines */
+    .axis-line  { stroke: var(--border); stroke-width: 1; }
+    .grid-line  { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+    .axis-label { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+    .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .chart-area { fill: url(#areaGradient); }
+    .data-dot   { fill: var(--accent); }
+    .data-dot:hover { r: 5; }
+
+    /* Tooltip */
+    #tooltip {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    #tooltip.visible { opacity: 1; }
+
+    /* ── JSON panel ───────────────────────────────────── */
+    .json-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .json-card h3 {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--accent2);
+      max-height: 320px;
+    }
+
+    /* ── Status bar ───────────────────────────────────── */
+    #status {
+      margin-bottom: 16px;
+      font-size: 12px;
+      min-height: 18px;
+      color: var(--muted);
+    }
+    #status.error { color: var(--danger); }
+    #status.ok    { color: var(--accent2); }
+
+    .placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>MiniObserv Dashboard</h1>
+
+  <!-- ── Query Form ─────────────────────────────────────────────────────── -->
+  <form class="form-card" id="queryForm">
+    <label>
+      Server URL
+      <input id="serverUrl" type="url" value="http://localhost:8080" required />
+    </label>
+
+    <label>
+      Agent Token (signing secret)
+      <input id="agentToken" type="password" placeholder="your-secret-here-min-16-chars" required />
+    </label>
+
+    <label>
+      Host
+      <input id="host" type="text" value="node-example" required />
+    </label>
+
+    <label>
+      Metric
+      <select id="metricName">
+        <option value="cpu.usage_pct">cpu.usage_pct</option>
+        <option value="mem.used_pct">mem.used_pct</option>
+        <option value="mem.used_bytes">mem.used_bytes</option>
+        <option value="mem.total_bytes">mem.total_bytes</option>
+        <option value="disk.used_pct">disk.used_pct</option>
+        <option value="disk.used_bytes">disk.used_bytes</option>
+        <option value="disk.total_bytes">disk.total_bytes</option>
+        <option value="net.bytes_in">net.bytes_in</option>
+        <option value="net.bytes_out">net.bytes_out</option>
+      </select>
+    </label>
+
+    <label>
+      Time Range
+      <select id="timeRange">
+        <option value="15">Last 15 minutes</option>
+        <option value="60" selected>Last 1 hour</option>
+        <option value="360">Last 6 hours</option>
+        <option value="1440">Last 24 hours</option>
+      </select>
+    </label>
+
+    <label>
+      Bucket
+      <select id="bucket">
+        <option value="1m">1 minute</option>
+        <option value="5m" selected>5 minutes</option>
+        <option value="15m">15 minutes</option>
+        <option value="1h">1 hour</option>
+      </select>
+    </label>
+
+    <label>
+      Aggregation
+      <select id="agg">
+        <option value="avg" selected>avg</option>
+        <option value="max">max</option>
+        <option value="min">min</option>
+      </select>
+    </label>
+
+    <label style="justify-content: flex-end;">
+      <button type="submit" id="submitBtn">Query</button>
+    </label>
+  </form>
+
+  <div id="status"></div>
+
+  <!-- ── Chart ──────────────────────────────────────────────────────────── -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <span class="chart-title" id="chartTitle">—</span>
+      <span class="chart-meta" id="chartMeta"></span>
+    </div>
+    <div id="chart-container">
+      <div class="placeholder" id="chartPlaceholder">Submit the form to load data</div>
+    </div>
+  </div>
+
+  <!-- ── Raw JSON ───────────────────────────────────────────────────────── -->
+  <div class="json-card">
+    <h3>Raw API response</h3>
+    <pre id="jsonOutput">—</pre>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <script type="module">
+    // ── JWT mint (HS256) using Web Crypto API ───────────────────────────────
+    function b64url(buf) {
+      return btoa(String.fromCharCode(...new Uint8Array(buf)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    }
+
+    async function mintJWT(secret) {
+      const enc = new TextEncoder();
+      const header  = b64url(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+      const now     = Math.floor(Date.now() / 1000);
+      const payload = b64url(enc.encode(JSON.stringify({ iss: 'miniobserv-agent', iat: now, exp: now + 86400 })));
+      const sigInput = `${header}.${payload}`;
+
+      const key = await crypto.subtle.importKey(
+        'raw', enc.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false, ['sign']
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(sigInput));
+      return `${sigInput}.${b64url(sig)}`;
+    }
+
+    // ── SVG line chart ──────────────────────────────────────────────────────
+    const SVG_NS    = 'http://www.w3.org/2000/svg';
+    const PAD       = { top: 12, right: 20, bottom: 36, left: 56 };
+
+    function makeSVGEl(tag, attrs = {}) {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      return el;
+    }
+
+    function renderChart(points, metricName) {
+      const container = document.getElementById('chart-container');
+      container.innerHTML = '';
+
+      if (!points || points.length === 0) {
+        container.innerHTML = '<div class="placeholder">No data points returned</div>';
+        return;
+      }
+
+      const W  = container.clientWidth || 800;
+      const H  = 260;
+      const IW = W - PAD.left - PAD.right;
+      const IH = H - PAD.top  - PAD.bottom;
+
+      const values = points.map(p => p.value);
+      const times  = points.map(p => new Date(p.time).getTime());
+      const minV   = Math.min(...values);
+      const maxV   = Math.max(...values);
+      const rangeV = maxV - minV || 1;
+      const minT   = Math.min(...times);
+      const maxT   = Math.max(...times);
+      const rangeT = maxT - minT || 1;
+
+      const xOf = t => PAD.left + ((t - minT) / rangeT) * IW;
+      const yOf = v => PAD.top  + (1 - (v - minV) / rangeV) * IH;
+
+      // SVG root
+      const svg = makeSVGEl('svg', { viewBox: `0 0 ${W} ${H}`, height: H });
+
+      // Gradient definition
+      const defs = makeSVGEl('defs');
+      const grad = makeSVGEl('linearGradient', { id: 'areaGradient', x1: '0', y1: '0', x2: '0', y2: '1' });
+      const stop1 = makeSVGEl('stop', { offset: '0%',   'stop-color': 'var(--accent)', 'stop-opacity': '0.25' });
+      const stop2 = makeSVGEl('stop', { offset: '100%', 'stop-color': 'var(--accent)', 'stop-opacity': '0.02' });
+      grad.append(stop1, stop2);
+      defs.append(grad);
+      svg.append(defs);
+
+      // Y-axis grid lines (5 divisions)
+      const yTicks = 5;
+      for (let i = 0; i <= yTicks; i++) {
+        const v    = minV + (rangeV / yTicks) * i;
+        const y    = yOf(v);
+        const line = makeSVGEl('line', { x1: PAD.left, y1: y, x2: PAD.left + IW, y2: y, class: i === 0 ? 'axis-line' : 'grid-line' });
+        const lbl  = makeSVGEl('text', { x: PAD.left - 8, y: y + 4, 'text-anchor': 'end', class: 'axis-label' });
+        lbl.textContent = fmtValue(v, metricName);
+        svg.append(line, lbl);
+      }
+
+      // X-axis baseline
+      svg.append(makeSVGEl('line', {
+        x1: PAD.left, y1: PAD.top + IH,
+        x2: PAD.left + IW, y2: PAD.top + IH,
+        class: 'axis-line'
+      }));
+
+      // X-axis labels (up to 8 evenly spaced)
+      const xStep = Math.max(1, Math.floor(points.length / 8));
+      for (let i = 0; i < points.length; i += xStep) {
+        const x   = xOf(times[i]);
+        const lbl = makeSVGEl('text', { x, y: PAD.top + IH + 16, 'text-anchor': 'middle', class: 'axis-label' });
+        lbl.textContent = fmtTime(points[i].time);
+        svg.append(lbl);
+      }
+
+      // Area path
+      const areaD = [
+        `M ${xOf(times[0])} ${PAD.top + IH}`,
+        ...points.map((p, i) => `L ${xOf(times[i])} ${yOf(p.value)}`),
+        `L ${xOf(times[times.length - 1])} ${PAD.top + IH}`,
+        'Z'
+      ].join(' ');
+      svg.append(makeSVGEl('path', { d: areaD, class: 'chart-area' }));
+
+      // Line path
+      const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xOf(times[i])} ${yOf(p.value)}`).join(' ');
+      svg.append(makeSVGEl('path', { d: lineD, class: 'chart-line' }));
+
+      // Data dots + hover tooltip
+      const tooltip = document.getElementById('tooltip');
+      for (let i = 0; i < points.length; i++) {
+        const cx = xOf(times[i]);
+        const cy = yOf(points[i].value);
+        const dot = makeSVGEl('circle', { cx, cy, r: 3, class: 'data-dot' });
+        dot.addEventListener('mouseenter', e => {
+          tooltip.innerHTML = `<strong>${fmtTime(points[i].time, true)}</strong><br>${fmtValue(points[i].value, metricName)}`;
+          tooltip.classList.add('visible');
+        });
+        dot.addEventListener('mousemove', e => {
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top  = (e.clientY - 10) + 'px';
+        });
+        dot.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+        svg.append(dot);
+      }
+
+      container.append(svg);
+    }
+
+    function fmtTime(iso, full = false) {
+      const d = new Date(iso);
+      if (full) return d.toLocaleString();
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtValue(v, name = '') {
+      if (name.endsWith('_pct'))   return v.toFixed(1) + '%';
+      if (name.endsWith('_bytes')) return fmtBytes(v);
+      return v.toFixed(2);
+    }
+
+    function fmtBytes(b) {
+      if (b >= 1024 ** 3) return (b / 1024 ** 3).toFixed(1) + ' GB';
+      if (b >= 1024 ** 2) return (b / 1024 ** 2).toFixed(1) + ' MB';
+      if (b >= 1024)      return (b / 1024).toFixed(1) + ' KB';
+      return b + ' B';
+    }
+
+    // ── Form submission ─────────────────────────────────────────────────────
+    const form       = document.getElementById('queryForm');
+    const statusEl   = document.getElementById('status');
+    const jsonOutput = document.getElementById('jsonOutput');
+    const chartTitle = document.getElementById('chartTitle');
+    const chartMeta  = document.getElementById('chartMeta');
+    const submitBtn  = document.getElementById('submitBtn');
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className   = type;
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      setStatus('Fetching…');
+
+      const baseUrl    = document.getElementById('serverUrl').value.replace(/\/$/, '');
+      const secret     = document.getElementById('agentToken').value;
+      const host       = document.getElementById('host').value;
+      const name       = document.getElementById('metricName').value;
+      const rangeMin   = parseInt(document.getElementById('timeRange').value, 10);
+      const bucket     = document.getElementById('bucket').value;
+      const agg        = document.getElementById('agg').value;
+
+      const now  = new Date();
+      const from = new Date(now - rangeMin * 60 * 1000);
+
+      try {
+        const token = await mintJWT(secret);
+
+        const params = new URLSearchParams({
+          host, name,
+          from:   from.toISOString(),
+          to:     now.toISOString(),
+          bucket, agg,
+        });
+
+        const res = await fetch(`${baseUrl}/api/v1/metrics/query?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        jsonOutput.textContent = JSON.stringify(data, null, 2);
+        chartTitle.textContent = `${name}  —  host: ${host}`;
+        chartMeta.textContent  = `${data.points?.length ?? 0} points · bucket ${bucket} · ${agg}`;
+
+        document.getElementById('chartPlaceholder')?.remove();
+        renderChart(data.points, name);
+        setStatus(`Loaded ${data.points?.length ?? 0} data points`, 'ok');
+      } catch (err) {
+        setStatus(`Error: ${err.message}`, 'error');
+        jsonOutput.textContent = err.message;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    // Re-render chart on window resize
+    let _lastData = null;
+    window.addEventListener('resize', () => {
+      if (_lastData) renderChart(_lastData.points, _lastData.name);
+    });
+  </script>
+</body>
+</html>

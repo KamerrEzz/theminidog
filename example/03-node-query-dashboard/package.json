@@ -1,0 +1,16 @@
+{
+  "name": "miniobserv-example-query-dashboard",
+  "version": "1.0.0",
+  "description": "MiniObserv example: terminal ASCII dashboard",
+  "type": "module",
+  "main": "dashboard.mjs",
+  "scripts": {
+    "start": "node dashboard.mjs"
+  },
+  "dependencies": {
+    "@kamerrezz/miniobserv": "file:../../sdk/js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

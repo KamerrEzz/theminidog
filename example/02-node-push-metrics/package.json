@@ -1,0 +1,16 @@
+{
+  "name": "miniobserv-example-push-metrics",
+  "version": "1.0.0",
+  "description": "MiniObserv example: push 5 metric types every 5 seconds",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@kamerrezz/miniobserv": "file:../../sdk/js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
