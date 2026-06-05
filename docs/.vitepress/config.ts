@@ -27,6 +27,7 @@ const enSidebar = [
   {
     text: 'Behind the scenes',
     items: [
+      { text: 'Agent vs Server', link: '/agent-vs-server' },
       { text: 'Workflows & CI/CD', link: '/workflow-setup' },
       { text: 'How We Built It', link: '/how-we-built-it' },
     ],
@@ -60,6 +61,7 @@ const esSidebar = [
   {
     text: 'Detrás del proyecto',
     items: [
+      { text: 'Agente vs Servidor', link: '/es/agente-vs-servidor' },
       { text: 'Workflows y CI/CD', link: '/es/configuracion-workflows' },
       { text: 'Cómo lo construimos', link: '/es/como-lo-construimos' },
     ],
