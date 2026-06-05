@@ -5,6 +5,7 @@
 package tools
 
 import (
+	_ "github.com/fsnotify/fsnotify"
 	_ "github.com/go-chi/chi/v5"
 	_ "github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-migrate/migrate/v4"
