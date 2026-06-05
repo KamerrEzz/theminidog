@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/kamerrezz/theminidog/internal/agent"
 	"github.com/kamerrezz/theminidog/internal/agent/collector"
+	"github.com/kamerrezz/theminidog/internal/agent/logtail"
 	"github.com/kamerrezz/theminidog/internal/agent/sender"
 	"github.com/kamerrezz/theminidog/internal/config"
 )
@@ -77,6 +78,21 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	if len(cfg.LogPaths) > 0 {
+		logSnd := logtail.NewHTTPLogSender(
+			cfg.ServerURL.String()+"/api/v1/logs",
+			agentToken,
+			sender.DefaultBackoff(),
+			slog.Default(),
+		)
+		tailer, err := logtail.NewTailer(cfg.LogPaths, cfg.AgentHost, logSnd, slog.Default())
+		if err != nil {
+			slog.Error("failed to create log tailer", "err", err)
+			os.Exit(1)
+		}
+		go tailer.Run(ctx)
+	}
 
 	slog.Info("agent starting", "host", cfg.AgentHost, "interval", cfg.CollectInterval, "server", cfg.ServerURL.String())
 	ag.Run(ctx)
