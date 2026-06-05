@@ -55,6 +55,7 @@ func waitFor(attempt int, cfg BackoffConfig, randFn func() float64) time.Duratio
 // HTTPSender sends metric batches over HTTP with exponential backoff.
 type HTTPSender struct {
 	url     string
+	token   string // optional Bearer token; empty = no Authorization header
 	client  *http.Client
 	backoff BackoffConfig
 	randFn  func() float64
@@ -100,6 +101,13 @@ func (s *HTTPSender) withSleepFn(fn func(ctx context.Context, d time.Duration) e
 	return s
 }
 
+// WithToken sets the Bearer token sent on every request.
+// Returns s for chaining: NewHTTPSender(...).WithToken(tok)
+func (s *HTTPSender) WithToken(token string) *HTTPSender {
+	s.token = token
+	return s
+}
+
 // Send posts the batch to the server, retrying on transient errors.
 func (s *HTTPSender) Send(ctx context.Context, batch model.MetricBatch) error {
 	body, err := json.Marshal(batch)
@@ -118,6 +126,9 @@ func (s *HTTPSender) Send(ctx context.Context, batch model.MetricBatch) error {
 			return permanentError{fmt.Errorf("build request: %w", err)}
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if s.token != "" {
+			req.Header.Set("Authorization", "Bearer "+s.token)
+		}
 
 		resp, err := s.client.Do(req)
 		if err != nil {

@@ -246,6 +246,53 @@ func TestSend_body_is_valid_json(t *testing.T) {
 	}
 }
 
+// TestSend_WithToken_SetsAuthorizationHeader verifies that WithToken causes
+// the sender to include an Authorization: Bearer header on every request.
+func TestSend_WithToken_SetsAuthorizationHeader(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(202)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := BackoffConfig{Base: time.Millisecond, Max: 10 * time.Millisecond, Jitter: 0}
+	s := NewHTTPSender(srv.URL, cfg, nil).
+		WithToken("test-jwt-value").
+		withRandFn(constRand).
+		withSleepFn(noopSleep)
+
+	if err := s.Send(context.Background(), makeBatch()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer test-jwt-value" {
+		t.Errorf("expected Authorization: Bearer test-jwt-value, got: %q", gotAuth)
+	}
+}
+
+// TestSend_NoWithToken_OmitsAuthorizationHeader verifies that when WithToken is
+// not called, no Authorization header is sent.
+func TestSend_NoWithToken_OmitsAuthorizationHeader(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(202)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := BackoffConfig{Base: time.Millisecond, Max: 10 * time.Millisecond, Jitter: 0}
+	s := NewHTTPSender(srv.URL, cfg, nil).
+		withRandFn(constRand).
+		withSleepFn(noopSleep)
+
+	if err := s.Send(context.Background(), makeBatch()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "" {
+		t.Errorf("expected no Authorization header, got: %q", gotAuth)
+	}
+}
+
 // TestWaitFor_table tests the waitFor function with deterministic inputs.
 func TestWaitFor_table(t *testing.T) {
 	cfg := DefaultBackoff()
