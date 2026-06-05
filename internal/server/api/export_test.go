@@ -17,3 +17,8 @@ func ExportedHandleAlerts(a alerting.AlertReader) http.Handler {
 func ExportedHandleHosts(tracker *storage.HostTracker) http.Handler {
 	return handleHosts(tracker)
 }
+
+// ExportedHandlePrometheus exposes handlePrometheus for black-box tests.
+func ExportedHandlePrometheus(repo storage.MetricRepository) http.Handler {
+	return handlePrometheus(repo)
+}

@@ -22,6 +22,7 @@ const enSidebar = [
     text: 'Integrations',
     items: [
       { text: 'Express / NestJS / Next.js', link: '/integration-guide' },
+      { text: 'Grafana Integration', link: '/grafana' },
     ],
   },
   {
@@ -58,6 +59,7 @@ const esSidebar = [
     text: 'Integraciones',
     items: [
       { text: 'Express / NestJS / Next.js', link: '/es/guia-integracion' },
+      { text: 'Integración con Grafana', link: '/es/grafana' },
     ],
   },
   {

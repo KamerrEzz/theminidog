@@ -1,0 +1,37 @@
+# Add Grafana + Prometheus to your MiniObserv stack.
+# Run from the deployments/ directory:
+#   docker compose -f docker-compose.yml -f grafana/docker-compose.yml up
+#
+# Grafana:    http://localhost:3000  (admin / admin)
+# Prometheus: http://localhost:9090
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - server
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus_data:
+  grafana_data:

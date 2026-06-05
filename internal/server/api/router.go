@@ -41,6 +41,8 @@ func NewRouter(
 		r.Get("/api/v1/dashboard/metrics", dash.HandleDashboardMetrics)
 		r.Get("/api/v1/dashboard/logs", dash.HandleDashboardLogs)
 	}
+	// Prometheus-compatible scrape endpoint — public, no JWT.
+	r.Get("/metrics", handlePrometheus(metricRepo))
 	// Always register alerts endpoint — handler is nil-safe (returns [] when no evaluator)
 	r.Get("/api/v1/alerts", handleAlerts(alerter))
 	// Always register hosts endpoint — handler is nil-safe (returns [] when no tracker)
