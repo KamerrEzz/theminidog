@@ -1,61 +1,72 @@
-name: "💬 Feedback & Inspiration"
-description: "Share your thoughts, what you learned, what you built inspired by this, or just say hi."
+name: "💬 Feedback & Inspiration / Opiniones e Inspiración"
+description: "Share your thoughts, what you learned, or what you built. / Comparte lo que aprendiste o construiste."
 title: "[Feedback] "
 labels: ["feedback"]
 body:
   - type: markdown
     attributes:
       value: |
-        ## Hey, glad you're here 👋
+        ## Hey, glad you're here 👋 · Hola, qué bueno que estés aquí
 
-        This project was built to be read, learned from, and hopefully inspire you to build something of your own.
-        If it did — or if you have thoughts, questions, or just want to share — this is the place.
+        **EN** — This project was built to be read, learned from, and hopefully inspire you to build something of your own. If it did — or if you have thoughts, questions, or just want to share — this is the place.
 
-        **Learning to code or want to go deeper?** Come build with us at [Zeew Space](https://zeew.space) — where you learn by building real projects, get feedback from real people, and end up with a portfolio you're proud of. → **[zeew.space/discord](https://zeew.space/discord)**
+        **ES** — Este proyecto fue construido para ser leído, aprendido y, con suerte, inspirarte a construir algo propio. Si lo hizo — o si tienes pensamientos, preguntas, o simplemente quieres compartir — este es el lugar.
+
+        ---
+
+        **Learning to code? / ¿Aprendiendo a programar?**
+        Join [Zeew Space](https://zeew.space) — donde aprendes construyendo cosas reales desde el primer día. No teoría en videos infinitos: aprendes un concepto, lo aplicas en código, recibes feedback de un humano, y terminas con un proyecto para tu portafolio.
+        → **[zeew.space/discord](https://zeew.space/discord)**
 
   - type: textarea
     id: what-brought-you-here
     attributes:
-      label: "What brought you here?"
-      description: "Found this project via GitHub, a blog post, a friend? Just curious."
-      placeholder: "I was looking for an example of a Go observability system / my friend showed me this / I was learning TimescaleDB..."
+      label: "¿Qué te trajo aquí? / What brought you here?"
+      description: "¿Lo encontraste en GitHub, te lo mostró un amigo, estabas aprendiendo Go? / Found it on GitHub, a friend shared it, you were learning Go?"
+      placeholder: |
+        ES: Estaba aprendiendo Go y encontré este proyecto / Mi amiga me lo mostró / Quería entender cómo funciona Datadog...
+        EN: I was learning Go and found this / A friend showed me / I wanted to understand how Datadog works...
     validations:
       required: false
 
   - type: textarea
     id: thoughts
     attributes:
-      label: "Your thoughts"
-      description: "What did you think? What did you learn? What surprised you? What would you do differently?"
-      placeholder: "I didn't know CPU% was calculated from deltas. I tried the same pattern for my own metrics collector and it worked..."
+      label: "Tus pensamientos / Your thoughts"
+      description: "¿Qué aprendiste? ¿Qué te sorprendió? ¿Qué harías diferente? / What did you learn? What surprised you? What would you do differently?"
+      placeholder: |
+        ES: No sabía que el % de CPU se calculaba con deltas. Intenté el mismo patrón en mi propio proyecto y funcionó...
+        EN: I didn't know CPU% was calculated from deltas. I tried the same pattern in my own project and it worked...
     validations:
       required: true
 
   - type: textarea
     id: built-something
     attributes:
-      label: "Did you build something inspired by this?"
-      description: "If this project sparked an idea and you built something — even a small experiment — share it. We'd love to see it."
-      placeholder: "I built a similar thing but for tracking API latency... / I used the statFn injection pattern in my own project..."
+      label: "¿Construiste algo inspirado en esto? / Did you build something inspired by this?"
+      description: "Si este proyecto te dio una idea y construiste algo — aunque sea un experimento pequeño — compártelo. / If this sparked an idea and you built something — even a small experiment — share it."
+      placeholder: |
+        ES: Hice algo parecido pero para rastrear latencia de API / Usé el patrón statFn en mi propio proyecto...
+        EN: I built something similar for tracking API latency / I used the statFn injection pattern in my own project...
     validations:
       required: false
 
   - type: dropdown
     id: experience
     attributes:
-      label: "Your programming experience"
-      description: "Just so we know how to read your feedback."
+      label: "Tu experiencia / Your experience"
+      description: "Solo para saber cómo leer tu feedback. / Just so we know how to read your feedback."
       options:
-        - "Just starting out"
-        - "Some experience (< 2 years)"
-        - "Intermediate (2–5 years)"
-        - "Senior / experienced"
+        - "Empezando / Just starting out"
+        - "Algo de experiencia / Some experience (< 2 years)"
+        - "Intermedio / Intermediate (2–5 years)"
+        - "Senior / experimentado"
     validations:
       required: false
 
   - type: checkboxes
     id: community
     attributes:
-      label: "Want to keep learning?"
+      label: "¿Quieres seguir aprendiendo? / Want to keep learning?"
       options:
-        - label: "I'd like to join the Zeew Space community — [zeew.space/discord](https://zeew.space/discord)"
+        - label: "Me gustaría unirme a la comunidad Zeew Space / I'd like to join the Zeew Space community — [zeew.space/discord](https://zeew.space/discord)"

@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: "💬 Zeew Space Discord — learn by building"
+  - name: "💬 Zeew Space Discord — aprende construyendo / learn by building"
     url: https://zeew.space/discord
-    about: "Learning to code or want to go deeper into systems? Join the community at Zeew Space — where you build real projects from day one."
-  - name: "📖 Documentation"
+    about: "¿Aprendiendo a programar? En Zeew construyes cosas reales desde el primer día y terminas con proyectos para tu portafolio. / Learning to code? At Zeew you build real things from day one."
+  - name: "📖 Documentación / Documentation"
     url: https://kamerrezz.github.io/theminidog/
-    about: "Full documentation including architecture, API reference, and guides for beginners."
+    about: "Docs completas con arquitectura, referencia de API y guías para principiantes. / Full docs including architecture, API reference, and beginner guides."
+  - name: "📖 Documentación en Español"
+    url: https://kamerrezz.github.io/theminidog/es/
+    about: "Toda la documentación disponible en español."

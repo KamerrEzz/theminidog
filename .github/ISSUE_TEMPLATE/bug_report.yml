@@ -1,33 +1,33 @@
-name: "🐛 Bug Report"
-description: "Something isn't working as expected."
+name: "🐛 Bug Report / Reporte de bug"
+description: "Something isn't working as expected. / Algo no funciona como se esperaba."
 title: "[Bug] "
 labels: ["bug"]
 body:
   - type: textarea
     id: what-happened
     attributes:
-      label: "What happened?"
-      description: "Describe the bug. What did you expect vs what did you see?"
+      label: "¿Qué pasó? / What happened?"
+      description: "Describe el bug. ¿Qué esperabas vs qué viste? / Describe the bug. What did you expect vs what did you see?"
     validations:
       required: true
 
   - type: textarea
     id: reproduce
     attributes:
-      label: "How to reproduce"
-      description: "Steps to reproduce the behavior."
+      label: "Cómo reproducirlo / How to reproduce"
+      description: "Pasos para reproducir el problema. / Steps to reproduce the behavior."
       placeholder: |
-        1. Set ALERT_RULES to '...'
-        2. Start the agent
-        3. Wait 30s
-        4. See error in server logs
+        1. Configurar ALERT_RULES como '...' / Set ALERT_RULES to '...'
+        2. Iniciar el agente / Start the agent
+        3. Esperar 30s / Wait 30s
+        4. Ver el error en los logs del servidor / See error in server logs
     validations:
       required: true
 
   - type: textarea
     id: environment
     attributes:
-      label: "Environment"
+      label: "Entorno / Environment"
       placeholder: |
         - OS: Ubuntu 22.04
         - Go version: 1.23
@@ -39,7 +39,7 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: "Relevant logs"
+      label: "Logs relevantes / Relevant logs"
       render: shell
     validations:
       required: false
