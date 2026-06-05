@@ -4,7 +4,7 @@
 > Collect metrics and logs from your servers, store them in TimescaleDB,
 > query them through a REST API, and monitor thresholds with a live dashboard.
 
-Built as a **4-week deep dive** into how observability tools like Datadog work under the hood — no black boxes.
+Built as a **5-week deep dive** into how observability tools like Datadog work under the hood — no black boxes.
 
 ---
 
@@ -47,7 +47,10 @@ Built as a **4-week deep dive** into how observability tools like Datadog work u
 | ✅ | Live dashboard with SVG sparklines | html/template + //go:embed |
 | ✅ | Docker Compose full stack | multi-stage builds |
 | ✅ | TypeScript SDK (zero runtime deps) | node:crypto for JWT |
-| ✅ | 213 unit tests, strict TDD | go test ./... |
+| ✅ | Webhook alert notifications (Slack, Discord, Teams, PagerDuty) | fire-and-forget HTTP POST |
+| ✅ | Multi-host health tracking with live sidebar status | in-memory HostTracker |
+| ✅ | TimescaleDB retention + compression (metrics 30d, logs 14d) | TimescaleDB background workers |
+| ✅ | 213+ unit tests, strict TDD | go test ./... |
 
 ---
 
@@ -98,9 +101,9 @@ Live-updating every 5 seconds. No page reload.
 ┌─ MiniObserv ──────────────────── ● live  🔴 1 firing ─┐
 ├─ HOSTS ──┬─────────────────────────────────────────────┤
 │          │  ⚠ Memory Used > 8 | actual: 10.36%         │
-│ ● a26af… │                                             │
-│          │  ┌────────────────┐  ┌────────────────┐     │
-│          │  │ CPU Usage      │  │ Memory Used    │     │
+│ ● web-01 │                                             │
+│ ● web-02 │  ┌────────────────┐  ┌────────────────┐     │
+│ ● api-01 │  │ CPU Usage      │  │ Memory Used    │     │
 │          │  │   0.70%        │  │   10.19%       │     │
 │          │  │ → stable       │  │ ↑ rising       │     │
 │          │  │ ▁▂▁▁▂▁▂▁▁     │  │ ▃▄▅▅▄▅▅▄▅▅     │     │
@@ -111,6 +114,8 @@ Live-updating every 5 seconds. No page reload.
 │          │  16:42:31  INFO  POST /tasks → 201 (0ms)    │
 └──────────┴─────────────────────────────────────────────┘
 ```
+
+Host sidebar dots are color-coded: green (● ok — seen within `HOST_STALE_AFTER`), orange (● stale — silent but not yet down), red (● down — silent beyond `HOST_DOWN_AFTER`, webhook fired).
 
 ---
 
@@ -127,6 +132,23 @@ Set `ALERT_RULES` as a JSON array:
 
 `host: "*"` evaluates the rule against all known hosts. Alerts log via `slog.Error` when firing and `slog.Info` when resolved.
 
+To receive notifications when an alert fires or resolves, set `ALERT_NOTIFICATIONS` to a JSON array of webhook destinations:
+
+```json
+[
+  {"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"},
+  {"type":"webhook","url":"https://discord.com/api/webhooks/YOUR/WEBHOOK"}
+]
+```
+
+MiniObserv POSTs the following payload to each URL (5s timeout, fire-and-forget):
+
+```json
+{"event":"firing","rule":{...},"value":10.36,"fired_at":"2026-06-05T16:42:23Z"}
+```
+
+`event` is `"firing"` when the threshold is crossed and `"resolved"` when it recovers. Works with Slack, Discord, Teams, PagerDuty, or any HTTP endpoint.
+
 ---
 
 ## API
@@ -137,6 +159,7 @@ GET  /                              Live dashboard
 GET  /healthz                       Liveness probe
 GET  /readyz                        Readiness + DB ping
 GET  /api/v1/alerts                 Current alert states
+GET  /api/v1/hosts                  Host health status (ok / stale / down)
 GET  /api/v1/dashboard/metrics      Metrics for dashboard JS
 GET  /api/v1/dashboard/logs         Logs for dashboard JS
 
@@ -205,6 +228,9 @@ Auto-mints 24h HS256 JWTs from your `AGENT_TOKEN` secret. Zero runtime dependenc
 | `AGENT_TOKEN` | required | Same secret as agent |
 | `LISTEN_ADDR` | `:8080` | Bind address |
 | `ALERT_RULES` | — | JSON array of threshold rules |
+| `ALERT_NOTIFICATIONS` | — | JSON array of webhook destinations for alert fire/resolve events |
+| `HOST_STALE_AFTER` | `20s` | Duration before a silent host is marked stale |
+| `HOST_DOWN_AFTER` | `50s` | Duration before a silent host is marked down and webhook fires |
 | `DASHBOARD_ENABLED` | `true` | Set `false` to disable `GET /` |
 | `MIGRATIONS_PATH` | `./migrations` | SQL migration files path |
 | `LOG_LEVEL` | `info` | Server log verbosity |

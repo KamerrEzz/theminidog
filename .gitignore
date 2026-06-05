@@ -29,3 +29,8 @@ go.work.sum
 # OS
 .DS_Store
 Thumbs.db
+
+# Docs
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/

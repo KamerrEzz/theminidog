@@ -208,6 +208,71 @@ If no data exists for the requested window, `points` is an empty array (not null
 
 ---
 
+## GET /api/v1/hosts
+
+Returns the current health status for all hosts known to the server. Public — no authentication required.
+
+The server tracks the last time each host sent metrics. Status is derived from how long ago that was:
+
+| Status | Condition |
+|--------|-----------|
+| `ok` | Host reported metrics within `HOST_STALE_AFTER` (default 20s) |
+| `stale` | Silent for longer than `HOST_STALE_AFTER`, but less than `HOST_DOWN_AFTER` |
+| `down` | Silent for longer than `HOST_DOWN_AFTER` (default 50s); a `host.down` webhook has fired |
+
+### Request
+
+```
+GET /api/v1/hosts
+```
+
+### Example
+
+```bash
+curl -s http://localhost:8080/api/v1/hosts | jq .
+```
+
+### Response
+
+```json
+{
+  "hosts": [
+    {
+      "host": "web-01",
+      "status": "ok",
+      "last_seen": "2026-06-05T16:42:23Z"
+    },
+    {
+      "host": "web-02",
+      "status": "stale",
+      "last_seen": "2026-06-05T16:41:58Z"
+    },
+    {
+      "host": "api-01",
+      "status": "down",
+      "last_seen": "2026-06-05T16:40:10Z"
+    }
+  ]
+}
+```
+
+`hosts` is an empty array if no agents have reported yet.
+
+### Responses
+
+| Status | Body | Meaning |
+|--------|------|---------|
+| `200 OK` | See above | Status returned for all known hosts. |
+
+### Related env vars
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HOST_STALE_AFTER` | `20s` | Duration after which a silent host is considered stale. Accepts Go duration strings. |
+| `HOST_DOWN_AFTER` | `50s` | Duration after which a silent host is considered down and a `host.down` webhook fires. |
+
+---
+
 ## GET /healthz
 
 Liveness probe. Returns `200 OK` with the body `ok` if the server process is running. Does not check the database.

@@ -65,6 +65,40 @@ All settings are read from environment variables. Neither binary reads a config 
 | `LOG_LEVEL` | no | `info` | One of: `debug`, `info`, `warn`, `error`. |
 | `REQUEST_TIMEOUT` | no | `10s` | Per-request timeout. Range: `1s`–`120s`. |
 | `SHUTDOWN_TIMEOUT` | no | `5s` | Graceful shutdown window. Range: `1s`–`30s`. |
+| `ALERT_NOTIFICATIONS` | no | — | JSON array of webhook objects. See [Notifications](#notifications) below. |
+| `HOST_STALE_AFTER` | no | `20s` | Duration after which a silent host is marked stale. Accepts Go duration strings. |
+| `HOST_DOWN_AFTER` | no | `50s` | Duration after which a silent host is marked down and a `host.down` webhook fires. |
+
+---
+
+## Notifications
+
+MiniObserv can POST a JSON payload to one or more HTTP webhooks whenever a threshold alert fires or resolves — and when a host goes silent beyond `HOST_DOWN_AFTER`.
+
+Set `ALERT_NOTIFICATIONS` to a JSON array of webhook objects:
+
+```bash
+ALERT_NOTIFICATIONS='[{"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"}]'
+```
+
+Each webhook receives a payload like:
+
+```json
+{"event":"firing","rule":{...},"value":10.36,"fired_at":"2026-06-05T16:42:23Z"}
+```
+
+- `event` is `"firing"` when the threshold is crossed, `"resolved"` when it recovers
+- Delivery is fire-and-forget with a 5-second timeout — no retries in v1
+- Works with any HTTP webhook: Slack, Discord, Teams, PagerDuty, or a custom endpoint
+
+**Multiple destinations:**
+
+```bash
+ALERT_NOTIFICATIONS='[
+  {"type":"webhook","url":"https://hooks.slack.com/services/YOUR/WEBHOOK/URL"},
+  {"type":"webhook","url":"https://discord.com/api/webhooks/YOUR/WEBHOOK"}
+]'
+```
 
 ---
 
