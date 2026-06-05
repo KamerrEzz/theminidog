@@ -323,7 +323,59 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/readyz
 
 ---
 
-## 8. Respuestas de error
+## 8. GET /metrics
+
+Pública — no requiere autenticación. Compatible con cualquier scraper de Prometheus.
+
+Devuelve los valores actuales de todas las métricas de todos los hosts en formato de texto Prometheus (versión 0.0.4).
+Los nombres de métricas llevan el prefijo `miniobserv_` y los puntos se reemplazan por guiones bajos.
+
+### Autenticación
+
+No requerida.
+
+### Petición
+
+```
+GET /metrics
+```
+
+### Respuesta
+
+`Content-Type: text/plain; version=0.0.4`
+
+```
+# HELP miniobserv_cpu_usage_pct MiniObserv metric: cpu.usage_pct
+# TYPE miniobserv_cpu_usage_pct gauge
+miniobserv_cpu_usage_pct{host="web-01"} 42.5 1717600943000
+miniobserv_cpu_usage_pct{host="web-02"} 71.2 1717600943000
+```
+
+### Ejemplo
+
+```bash
+curl http://localhost:8080/metrics
+```
+
+### Uso con Prometheus
+
+```yaml
+scrape_configs:
+  - job_name: miniobserv
+    static_configs:
+      - targets: ['tu-host:8080']
+    metrics_path: /metrics
+```
+
+### Códigos de respuesta
+
+| Código | Cuerpo | Significado |
+|--------|--------|-------------|
+| `200 OK` | Formato texto Prometheus | Métricas devueltas para todos los hosts conocidos. |
+
+---
+
+## 9. Respuestas de error
 
 Todas las respuestas de error siguen este formato JSON:
 
@@ -374,7 +426,7 @@ Todas las respuestas de error siguen este formato JSON:
 
 ---
 
-## 9. Referencia de métricas
+## 10. Referencia de métricas
 
 ### Tabla de nombres canónicos
 
@@ -403,7 +455,7 @@ Estos valores representan el **delta de bytes** desde el tick anterior, no el to
 
 ---
 
-## 10. Límites
+## 11. Límites
 
 | Límite | Valor |
 |--------|-------|

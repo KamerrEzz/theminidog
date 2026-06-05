@@ -105,6 +105,19 @@ ALERT_NOTIFICATIONS='[
 
 ---
 
+## Grafana
+
+MiniObserv expone `GET /metrics` en formato de texto Prometheus. Para añadir Grafana:
+
+```bash
+cd deployments
+docker compose -f docker-compose.yml -f grafana/docker-compose.yml up
+```
+
+Guía completa → [Integración con Grafana](grafana.md)
+
+---
+
 ## 4. Ejecutar con Docker Compose
 
 El archivo `deployments/docker-compose.yml` levanta TimescaleDB, el servidor y el agente en una sola red interna.

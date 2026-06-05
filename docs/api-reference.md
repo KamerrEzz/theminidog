@@ -313,6 +313,54 @@ readinessProbe:
 
 ---
 
+## GET /metrics
+
+Public — no authentication required. Compatible with any Prometheus scraper.
+
+Returns current metric values for all hosts in Prometheus text format (version 0.0.4).
+Metric names are prefixed with `miniobserv_` and dots replaced with underscores.
+
+### Request
+
+```
+GET /metrics
+```
+
+### Response
+
+`Content-Type: text/plain; version=0.0.4`
+
+```
+# HELP miniobserv_cpu_usage_pct MiniObserv metric: cpu.usage_pct
+# TYPE miniobserv_cpu_usage_pct gauge
+miniobserv_cpu_usage_pct{host="web-01"} 42.5 1717600943000
+miniobserv_cpu_usage_pct{host="web-02"} 71.2 1717600943000
+```
+
+### Example
+
+```bash
+curl http://localhost:8080/metrics
+```
+
+### Use with Prometheus
+
+```yaml
+scrape_configs:
+  - job_name: miniobserv
+    static_configs:
+      - targets: ['your-host:8080']
+    metrics_path: /metrics
+```
+
+### Responses
+
+| Status | Body | Meaning |
+|--------|------|---------|
+| `200 OK` | Prometheus text format | Metrics returned for all known hosts. |
+
+---
+
 ## Error Responses
 
 All errors follow the same JSON envelope:

@@ -102,6 +102,19 @@ ALERT_NOTIFICATIONS='[
 
 ---
 
+## Grafana
+
+MiniObserv exposes `GET /metrics` in Prometheus text format. To add Grafana:
+
+```bash
+cd deployments
+docker compose -f docker-compose.yml -f grafana/docker-compose.yml up
+```
+
+Full guide → [Grafana Integration](grafana.md)
+
+---
+
 ## Generating an AGENT_TOKEN
 
 The token is a shared secret used by both the agent and the server. It must be at least 16 characters. Use a cryptographically random value in production.

@@ -50,6 +50,7 @@ Built as a **5-week deep dive** into how observability tools like Datadog work u
 | ✅ | Webhook alert notifications (Slack, Discord, Teams, PagerDuty) | fire-and-forget HTTP POST |
 | ✅ | Multi-host health tracking with live sidebar status | in-memory HostTracker |
 | ✅ | TimescaleDB retention + compression (metrics 30d, logs 14d) | TimescaleDB background workers |
+| ✅ | Prometheus-compatible /metrics endpoint | text/plain; version=0.0.4 |
 | ✅ | 213+ unit tests, strict TDD | go test ./... |
 
 ---
@@ -158,6 +159,7 @@ MiniObserv POSTs the following payload to each URL (5s timeout, fire-and-forget)
 GET  /                              Live dashboard
 GET  /healthz                       Liveness probe
 GET  /readyz                        Readiness + DB ping
+GET  /metrics                       Prometheus text format (version 0.0.4)
 GET  /api/v1/alerts                 Current alert states
 GET  /api/v1/hosts                  Host health status (ok / stale / down)
 GET  /api/v1/dashboard/metrics      Metrics for dashboard JS
@@ -189,8 +191,20 @@ const client = new MiniObservClient({
   defaultHost: 'my-app',
 })
 
-// Push a metric
+// Push a single metric
 await client.pushMetric('cpu.usage_pct', 42.5, { core: 'total' })
+
+// Push a single log entry (v0.2.1)
+await client.pushLog('info', 'Deployment started', { version: '1.4.2' })
+
+// Push a batch of log entries (v0.2.1)
+await client.pushLogs({
+  host: 'my-app',
+  entries: [
+    { level: 'info',  message: 'Request received', labels: { path: '/api/tasks' } },
+    { level: 'error', message: 'DB timeout',        labels: { query: 'select' } },
+  ],
+})
 
 // Query last hour
 const result = await client.queryMetrics({
@@ -203,7 +217,9 @@ const result = await client.queryMetrics({
 })
 ```
 
-Auto-mints 24h HS256 JWTs from your `AGENT_TOKEN` secret. Zero runtime dependencies — uses `node:crypto`.
+SDK v0.2.1. Auto-mints 24h HS256 JWTs from your `AGENT_TOKEN` secret. Zero runtime dependencies — uses `node:crypto`.
+
+New in v0.2.1: `pushLog(level, message, options?)` and `pushLogs(batch: LogBatch)` — push individual or batched log entries. New exports: `LogBatch`, `LogEntryInput`.
 
 ---
 
@@ -309,6 +325,12 @@ make build-server
 go run ./cmd/stubserver &
 SERVER_URL=http://localhost:8080 go run ./cmd/agent
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, and [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ---
 
