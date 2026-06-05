@@ -426,3 +426,202 @@ Set `MIGRATIONS_PATH=/app/migrations` (or use the default `./migrations` with th
 - **Deployment must always include the migrations directory**: a binary-only deployment without the migrations folder will fail at startup. `//go:embed` would have baked them in.
 - The environment variable `MIGRATIONS_PATH` allows overriding the path without rebuilding the image — useful for local development where the working directory may differ from the container layout.
 - If single-binary deployment with embedded migrations is ever required, switching to `iofs://` with `//go:embed` is a self-contained change to `cmd/server/main.go`.
+
+---
+
+## ADR-15: WithNotifiers functional option on Evaluator
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+Week 5 added a webhook notification system. Notifiers needed to be injected into the server without breaking the 213 existing tests that instantiate the server directly. Adding a positional parameter to the constructor would have required updating every test call site.
+
+### Decision
+
+Add a functional option `WithNotifiers(notifiers []Notifier) ServerOption` that is passed to the server constructor only when notifiers are configured. Existing tests require no changes.
+
+### Consequences
+
+- **Stable constructor signature**: `NewServer(...)` never changes regardless of how many optional parameters are added in future.
+- **Backward compatibility**: all 213 existing tests continue to compile and pass without modification.
+- **Extensible**: adding new notifier types (email, PagerDuty) only requires implementing the `Notifier` interface.
+- **Silent default**: if `WithNotifiers` is not called, notification behavior is a no-op. This is correct for unit tests but would be a misconfiguration in production if notifiers were expected.
+- The functional options pattern is the idiomatic Go approach for extending constructors with optional parameters without breaking existing callers.
+
+---
+
+## ADR-16: In-memory HostTracker, no DB persistence
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+The system needs to know whether a host is alive, stale, or down. Two approaches were considered: persisting liveness state to the database, or maintaining it purely in memory.
+
+### Decision
+
+`HostTracker` is an in-memory struct with a `map[string]time.Time` protected by a mutex. The host heartbeat is updated on every metrics ingest. Nothing is written to the database.
+
+### Consequences
+
+- **Zero-latency updates**: no database round-trip on every ingest tick.
+- **No additional DB load**: TimescaleDB is not involved in liveness tracking.
+- **State is lost on restart**: after a server restart all hosts appear as `unknown` until they send their first batch. In production this can generate false `host.down` alerts at startup.
+- **Liveness is ephemeral by design**: a server restart repopulates state within the stale window (typically seconds to minutes). The operational cost of persisting this state does not justify the benefit, especially in v1 with a single server.
+
+---
+
+## ADR-17: Heartbeat at the ingest handler, not the storage layer
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+A decision was needed about where in the ingest flow to update the host's last-seen timestamp: in the HTTP handler or in the storage repository.
+
+### Decision
+
+`HandleIngest` calls `hostTracker.Heartbeat(host)` immediately after validating the batch and before calling `storage.Insert`. The storage repository has no knowledge of `HostTracker`.
+
+### Consequences
+
+- **Clear separation of concerns**: `storage` remains focused on persistence; liveness tracking belongs to the API layer.
+- **Heartbeat recorded even on storage failure**: if the database insert fails after the heartbeat, the host is still considered alive — which is correct, as it did send a valid batch.
+- **Invalid batches do not update liveness**: validation happens before the heartbeat call, so a malformed batch does not reset the host's timer.
+- Placing the heartbeat in the storage layer would couple two unrelated concerns and make the storage package harder to test in isolation.
+
+---
+
+## ADR-18: Hardcoded retention intervals v1
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+TimescaleDB supports automatic data retention policies (`add_retention_policy`). The question was whether to expose retention intervals as environment variables or hardcode them for v1.
+
+### Decision
+
+Retention intervals are defined as constants in code for v1 (metrics: 30 days, logs: 14 days). They are not exposed as environment variables or configurable parameters.
+
+### Consequences
+
+- **Simple deployment**: no additional configuration required; behavior is predictable.
+- **Straightforward migrations**: the retention policy SQL is a simple constant; no env-var interpolation or runtime configuration needed.
+- **No operator flexibility**: changing intervals requires recompiling. Operators cannot tune retention without modifying source code.
+- Exposing retention as configuration adds API surface and validation complexity. For v1, the defaults are sufficient; configurability can be added in v2 once real-world requirements are known.
+
+---
+
+## ADR-19: Logs hypertable conversion irreversible in down migration
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+Migration 003 converts the `logs` table into a TimescaleDB hypertable via `create_hypertable`. TimescaleDB provides no mechanism to undo this conversion — there is no `drop_hypertable` that restores the original regular table.
+
+### Decision
+
+The `003_logs.down.sql` file contains only a comment explaining that the operation is irreversible. It does not attempt to recreate the table as a regular table or silently succeed while leaving the schema in an inconsistent state.
+
+### Consequences
+
+- **Operational honesty**: operators know before applying the migration that rollback requires a restore from backup or manual table recreation.
+- **No silent failures**: a down migration that quietly does nothing is worse than one that documents its limitation explicitly.
+- **Rollback requires a backup**: rolling back migration 003 means restoring from a pre-migration snapshot or recreating the `logs` table manually and reloading data.
+- The down migration removes retention policies only (which can be re-added), and then stops. It does not touch the hypertable itself.
+
+---
+
+## ADR-20: Synthetic host.down via notifiers, not via ActiveAlerts()
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+`host.down` events need to fire webhook notifications. One option was to model host-down as a special alert rule that flows through the existing `ActiveAlerts()` threshold evaluation system. The other was to have `HostTracker` fire notifiers directly.
+
+### Decision
+
+`HostTracker` fires notifiers directly when it detects that a host has exceeded `HOST_DOWN_AFTER`. The `host.down` event does not pass through the threshold-based alert system.
+
+### Consequences
+
+- **Decoupled systems**: threshold alerts (metric value crosses a boundary) and liveness alerts (host goes silent) can evolve independently.
+- **host.down not in ActiveAlerts()**: if the alerts endpoint only exposes threshold alerts, `host.down` events will not appear there. This is intentional — they are a different class of event.
+- **Simpler model**: a down host has no numeric value, does not "resolve" automatically when the metric returns, and is triggered by the absence of data — not its presence. Forcing it into the threshold model would require awkward special-casing.
+- If a unified alert feed is ever needed, a shared event bus or a dedicated liveness-alert store would be the right approach, not repurposing `ActiveAlerts()`.
+
+---
+
+## ADR-21: Dashboard sidebar iterates HostStatuses with fallback to Hosts
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+The dashboard sidebar needs to display the list of hosts with their current status. Data can come from two sources: `HostTracker.HostStatuses()` (real-time in-memory state) and the list of distinct hosts known in the database.
+
+### Decision
+
+The sidebar first iterates `HostTracker.HostStatuses()`. If the tracker has no entries — for example, after a server restart before any agent has reported — it falls back to the list of distinct hosts from the database.
+
+### Consequences
+
+- **UX continuity**: the sidebar shows a meaningful host list even immediately after a server restart, before the first heartbeat arrives.
+- **Real-time state when available**: once agents start reporting, the sidebar reflects live liveness status.
+- **Fallback hosts show no status**: during the fallback period all hosts appear as `unknown`. This is honest — the server genuinely does not know their current state.
+- The alternative (showing an empty sidebar until the first heartbeat) would be confusing to users who expect to see their infrastructure immediately after a restart.
+
+---
+
+## ADR-22: Composite PK (id, time) required before create_hypertable on logs
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+TimescaleDB requires that the partitioning column (`time`) be part of every UNIQUE constraint and the PRIMARY KEY before a table can be converted to a hypertable. The `logs` table originally had only `id` as its primary key.
+
+### Decision
+
+Migration 003 alters the `logs` table to use a composite primary key `(id, time)` before calling `create_hypertable('logs', 'time')`.
+
+### Consequences
+
+- **Correct hypertable conversion**: `create_hypertable` succeeds without constraint errors.
+- **Future foreign-key references** to `logs.id` would also need to include `time` if added later.
+- **This is a technical requirement, not a design choice**: omitting this step causes a migration-time error. The composite PK is the minimum change needed to satisfy TimescaleDB's constraint.
+- Any UNIQUE index on `logs` must also include `time`. This is a permanent consequence of the hypertable conversion and must be kept in mind when adding future indexes.
+
+---
+
+## ADR-23: context.WithoutCancel for notification goroutines
+
+**Status**: Accepted
+**Date**: 2026-06-05
+
+### Context
+
+Webhook notifications are sent in independent goroutines. If the goroutines inherit the ingest handler's request context directly, they are cancelled as soon as the handler returns a response to the client — before the outbound HTTP request to the webhook can complete.
+
+### Decision
+
+Each notification goroutine receives `context.WithoutCancel(ctx)` instead of the original context. This decouples the goroutine's lifecycle from the HTTP request that triggered it. The goroutine retains its own 5-second deadline via `context.WithTimeout`.
+
+### Consequences
+
+- **Notifications complete independently**: even after the ingest handler has responded to the agent, the notification goroutine continues until it succeeds or times out.
+- **5-second deadline is the only bound**: if the webhook endpoint is slow or unreachable, the goroutine waits up to 5 seconds before giving up.
+- **SIGTERM edge case**: if the server receives SIGTERM while a notification is in flight, the goroutine will not be cancelled by the shutdown context — it will only stop when its own 5-second timeout expires. This is acceptable for a fire-and-forget notification system.
+- `context.WithoutCancel` is the correct Go primitive for fire-and-forget operations that must outlive their caller's context.

@@ -275,6 +275,27 @@ El agente debe manejar fallos transitorios del servidor (reinicios, sobrecarga t
 
 ---
 
+## ADR-14: Graceful shutdown con SIGINT y timeout configurable
+
+**Estado**: Aceptado
+**Fecha**: 2026-06-05
+
+### Contexto
+
+El servidor HTTP necesita manejar señales de terminación (`SIGINT`, `SIGTERM`) de forma correcta, completando las peticiones en vuelo antes de cerrar.
+
+### Decisión
+
+El servidor captura `SIGINT` y `SIGTERM` mediante un canal de señales. Al recibir la señal, llama a `http.Server.Shutdown(ctx)` con un contexto que expira según `SHUTDOWN_TIMEOUT` (predeterminado 5 s, máximo 30 s). El agente también propaga la cancelación del contexto raíz cuando recibe la señal, lo que detiene el `collectLoop` y drena el canal `batches`.
+
+### Consecuencias
+
+- **Habilita**: despliegues sin pérdida de datos en peticiones en vuelo; tiempo de apagado predecible y acotado; comportamiento correcto con orquestadores de contenedores (Docker, Kubernetes) que envían SIGTERM antes de SIGKILL.
+- **Restringe**: si hay peticiones muy largas en vuelo que superan `SHUTDOWN_TIMEOUT`, serán interrumpidas; el servidor no puede garantizar el procesamiento de todas las métricas en tránsito en el buffer del agente antes de cerrarse.
+- **Justificación**: el graceful shutdown es un requisito mínimo para operar en entornos de contenedores. El timeout configurable permite ajustar el comportamiento según el tiempo de respuesta esperado del servidor de base de datos.
+
+---
+
 ## ADR-15: Opción funcional WithNotifiers en el servidor
 
 **Estado**: Aceptado
@@ -461,24 +482,3 @@ Cada goroutine de notificación recibe `context.WithoutCancel(ctx)` en lugar del
 - **Habilita**: las notificaciones se completan aunque la petición HTTP original ya haya terminado; el timeout de 5 segundos del notificador es el único límite.
 - **Restringe**: si el servidor recibe SIGTERM durante el envío de una notificación, la goroutine no se cancelará por el contexto de shutdown; se cancelará solo cuando expire su propio timeout.
 - **Justificación**: `context.WithoutCancel` es la solución correcta en Go para operaciones de "fire-and-forget" que deben completarse con independencia del contexto del llamante.
-
----
-
-## ADR-14: Graceful shutdown con SIGINT y timeout configurable
-
-**Estado**: Aceptado
-**Fecha**: 2026-06-05
-
-### Contexto
-
-El servidor HTTP necesita manejar señales de terminación (`SIGINT`, `SIGTERM`) de forma correcta, completando las peticiones en vuelo antes de cerrar.
-
-### Decisión
-
-El servidor captura `SIGINT` y `SIGTERM` mediante un canal de señales. Al recibir la señal, llama a `http.Server.Shutdown(ctx)` con un contexto que expira según `SHUTDOWN_TIMEOUT` (predeterminado 5 s, máximo 30 s). El agente también propaga la cancelación del contexto raíz cuando recibe la señal, lo que detiene el `collectLoop` y drena el canal `batches`.
-
-### Consecuencias
-
-- **Habilita**: despliegues sin pérdida de datos en peticiones en vuelo; tiempo de apagado predecible y acotado; comportamiento correcto con orquestadores de contenedores (Docker, Kubernetes) que envían SIGTERM antes de SIGKILL.
-- **Restringe**: si hay peticiones muy largas en vuelo que superan `SHUTDOWN_TIMEOUT`, serán interrumpidas; el servidor no puede garantizar el procesamiento de todas las métricas en tránsito en el buffer del agente antes de cerrarse.
-- **Justificación**: el graceful shutdown es un requisito mínimo para operar en entornos de contenedores. El timeout configurable permite ajustar el comportamiento según el tiempo de respuesta esperado del servidor de base de datos.

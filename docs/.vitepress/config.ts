@@ -28,6 +28,7 @@ const enSidebar = [
     text: 'Behind the scenes',
     items: [
       { text: 'Workflows & CI/CD', link: '/workflow-setup' },
+      { text: 'How We Built It', link: '/how-we-built-it' },
     ],
   },
 ]
@@ -60,6 +61,7 @@ const esSidebar = [
     text: 'Detrás del proyecto',
     items: [
       { text: 'Workflows y CI/CD', link: '/es/configuracion-workflows' },
+      { text: 'Cómo lo construimos', link: '/es/como-lo-construimos' },
     ],
   },
 ]
