@@ -34,6 +34,10 @@ func (f *fakeRepo) Query(_ context.Context, _ storage.QueryParams) ([]storage.Qu
 	return f.queryPts, f.queryErr
 }
 
+func (f *fakeRepo) Hosts(_ context.Context, _ time.Duration) ([]string, error) {
+	return nil, nil
+}
+
 // helpers
 
 func mustDecode(t *testing.T, body io.Reader, v any) {

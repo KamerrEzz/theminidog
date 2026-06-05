@@ -1,11 +1,29 @@
 package storage_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/kamerrezz/theminidog/internal/model"
 	"github.com/kamerrezz/theminidog/internal/server/storage"
 )
+
+// TestMetricRepository_interface_Hosts verifies at compile time that
+// MetricRepository now declares the Hosts method (PR3 addition).
+// The fake below must implement all 4 methods; a missing method is a compile error.
+func TestMetricRepository_interface_Hosts(t *testing.T) {
+	var _ storage.MetricRepository = (*fakeMetricRepo)(nil)
+}
+
+type fakeMetricRepo struct{}
+
+func (f *fakeMetricRepo) Insert(_ context.Context, _ model.MetricBatch) (int, error) { return 0, nil }
+func (f *fakeMetricRepo) Query(_ context.Context, _ storage.QueryParams) ([]storage.QueryPoint, error) {
+	return nil, nil
+}
+func (f *fakeMetricRepo) Ping(_ context.Context) error                                    { return nil }
+func (f *fakeMetricRepo) Hosts(_ context.Context, _ time.Duration) ([]string, error) { return nil, nil }
 
 func TestQueryParams_Validate(t *testing.T) {
 	base := storage.QueryParams{

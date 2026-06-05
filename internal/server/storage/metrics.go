@@ -90,6 +90,7 @@ type MetricRepository interface {
 	Insert(ctx context.Context, batch model.MetricBatch) (int, error)
 	Query(ctx context.Context, params QueryParams) ([]QueryPoint, error)
 	Ping(ctx context.Context) error
+	Hosts(ctx context.Context, window time.Duration) ([]string, error)
 }
 
 type pgxMetricRepository struct {
@@ -167,4 +168,26 @@ func (r *pgxMetricRepository) Query(ctx context.Context, params QueryParams) ([]
 func (r *pgxMetricRepository) Ping(ctx context.Context) error {
 	_, err := r.pool.Exec(ctx, "SELECT 1")
 	return err
+}
+
+// Hosts returns the distinct host values seen in the metrics table within the
+// given window. Used by the alert evaluator for wildcard host expansion (ADR-2).
+func (r *pgxMetricRepository) Hosts(ctx context.Context, window time.Duration) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT host FROM metrics WHERE time > $1 ORDER BY host`,
+		time.Now().UTC().Add(-window),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query distinct hosts: %w", err)
+	}
+	defer rows.Close()
+	var hosts []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, fmt.Errorf("scan host: %w", err)
+		}
+		hosts = append(hosts, h)
+	}
+	return hosts, rows.Err()
 }
