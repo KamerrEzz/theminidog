@@ -27,6 +27,7 @@ const enSidebar = [
   {
     text: 'Behind the scenes',
     items: [
+      { text: 'Under the Hood', link: '/under-the-hood' },
       { text: 'Built with Curiosity', link: '/built-with-curiosity' },
       { text: 'Agent vs Server', link: '/agent-vs-server' },
       { text: 'How We Built It', link: '/how-we-built-it' },
@@ -62,6 +63,7 @@ const esSidebar = [
   {
     text: 'Detrás del proyecto',
     items: [
+      { text: 'Bajo el capó', link: '/es/bajo-el-capo' },
       { text: 'Construido con curiosidad', link: '/es/construido-con-curiosidad' },
       { text: 'Agente vs Servidor', link: '/es/agente-vs-servidor' },
       { text: 'Cómo lo construimos', link: '/es/como-lo-construimos' },
