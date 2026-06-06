@@ -23,14 +23,44 @@ The MiniObserv agent is a standalone Go binary. It runs **alongside** your Node.
 
 ## 2. Quick Setup (3 minutes)
 
-Add MiniObserv to your existing `docker-compose.yml`. You need two new services: the MiniObserv server (which stores metrics and serves the dashboard) and the agent (which collects and pushes metrics).
+Add MiniObserv to your existing `docker-compose.yml`. You need **three new services** alongside yours:
+
+| Service | What it is | Touches your app? |
+|---|---|---|
+| `miniobserv-db` | TimescaleDB — MiniObserv's **own** internal storage | No |
+| `miniobserv` | The MiniObserv server + dashboard | No |
+| `miniobserv-agent` | Collects OS metrics from the host | No |
+
+> **`miniobserv-db` is completely separate from your database.** If your stack uses PostgreSQL + Prisma, MySQL + Sequelize, or anything else — MiniObserv never touches it. It has its own isolated database container. Your app and MiniObserv don't share any data storage.
+
+### Typical stack: Express + Prisma + PostgreSQL
+
+This is what a real project looks like with MiniObserv added:
 
 ```yaml
-# Add to your existing docker-compose.yml
 services:
-  # ... your existing services ...
+  # ── your existing stack ──────────────────────────────────────
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: myapp
+      POSTGRES_PASSWORD: myapp
+      POSTGRES_DB: myapp_db
+    volumes:
+      - app_data:/var/lib/postgresql/data
 
-  miniobserv-db:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: "postgresql://myapp:myapp@db:5432/myapp_db"
+    depends_on:
+      - db
+      - miniobserv        # optional: wait for dashboard to be ready
+    volumes:
+      - app_logs:/var/log/app
+
+  # ── MiniObserv — add these three services ───────────────────
+  miniobserv-db:          # MiniObserv's own DB — isolated from yours
     image: timescale/timescaledb:latest-pg16
     environment:
       POSTGRES_USER: minidog
@@ -44,10 +74,7 @@ services:
       retries: 10
 
   miniobserv:
-    # Note: image not yet published — build from source
-    build:
-      context: ./path/to/theminidog
-      dockerfile: Dockerfile.server
+    image: kamerrezz/miniobserv-server:latest
     environment:
       DATABASE_URL: "postgres://minidog:minidog@miniobserv-db:5432/miniobserv?sslmode=disable"
       AGENT_TOKEN: "your-32-char-secret-here"
@@ -59,32 +86,29 @@ services:
         condition: service_healthy
 
   miniobserv-agent:
-    build:
-      context: ./path/to/theminidog
-      dockerfile: Dockerfile.agent
+    image: kamerrezz/miniobserv-agent:latest
     environment:
       SERVER_URL: "http://miniobserv:8080"
       AGENT_TOKEN: "your-32-char-secret-here"
-      COLLECT_INTERVAL: "10s"
-      LOG_PATHS: "/var/log/myapp/app.log"  # path to your app's log file
+      LOG_PATHS: "/var/log/app/app.log"
     volumes:
-      - app_logs:/var/log/myapp  # shared with your app container
+      - app_logs:/var/log/app:ro   # read-only access to your app's logs
 
 volumes:
-  miniobserv_data:
-  app_logs:
+  app_data:           # your app's data
+  miniobserv_data:    # MiniObserv's data — completely separate
+  app_logs:           # shared between app (write) and agent (read)
 ```
 
 **Generate a strong `AGENT_TOKEN`:**
 
 ```bash
-# Linux / macOS
 openssl rand -hex 32
 ```
 
-Use the same value in both `miniobserv` and `miniobserv-agent`. The token is a shared HS256 secret — it never leaves your infrastructure.
+Use the same value in both `miniobserv` and `miniobserv-agent`. It never leaves your infrastructure.
 
-Open `http://localhost:8080` after `docker compose up`. The dashboard appears as soon as the agent starts pushing data (within ~10 seconds).
+Open `http://localhost:8080` after `docker compose up`. The dashboard appears within ~10 seconds.
 
 ---
 
