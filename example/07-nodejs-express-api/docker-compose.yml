@@ -1,0 +1,49 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: minidog
+      POSTGRES_PASSWORD: minidog
+      POSTGRES_DB: miniobserv
+    volumes:
+      - miniobserv_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minidog -d miniobserv"]
+      interval: 5s
+      retries: 10
+
+  miniobserv:
+    image: kamerrezz/miniobserv-server:latest
+    environment:
+      DATABASE_URL: "postgres://minidog:minidog@db:5432/miniobserv?sslmode=disable"
+      AGENT_TOKEN: "dev-secret"
+      ALERT_RULES: '[{"host":"*","name":"cpu.usage_pct","op":">","threshold":85,"for":"5m"},{"host":"*","name":"mem.used_pct","op":">","threshold":90,"for":"5m"}]'
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  agent:
+    image: kamerrezz/miniobserv-agent:latest
+    environment:
+      SERVER_URL: "http://miniobserv:8080"
+      AGENT_TOKEN: "dev-secret"
+      AGENT_HOST: "tasks-api-host"
+    depends_on:
+      - miniobserv
+
+  app:
+    build: .
+    environment:
+      PORT: "3000"
+      APP_HOST: "tasks-api"
+      MINIOBSERV_URL: "http://miniobserv:8080"
+      MINIOBSERV_TOKEN: "dev-secret"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - miniobserv
+
+volumes:
+  miniobserv_data:
