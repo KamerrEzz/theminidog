@@ -20,6 +20,7 @@ export AGENT_TOKEN=your-secret-here-min-16-chars
 | 03 | [03-node-query-dashboard](./03-node-query-dashboard/) | Node.js terminal dashboard that queries cpu + memory and renders an ASCII bar chart every 10 seconds |
 | 04 | [04-go-http-client](./04-go-http-client/) | Pure Go (stdlib only) client that mints a JWT manually, pushes a metric, and queries it back |
 | 05 | [05-web-dashboard](./05-web-dashboard/) | Standalone HTML page — form + SVG line chart, calls the API via `fetch`, zero dependencies, no build step |
+| 07 | [07-nodejs-express-api](./07-nodejs-express-api/) | **Real-world** Express + TypeScript Tasks API — auto-observability middleware, structured logs via SDK, full docker-compose stack (app + agent + server + DB) |
 
 ---
 
@@ -32,5 +33,7 @@ export AGENT_TOKEN=your-secret-here-min-16-chars
 | 03 | Node.js >= 18 |
 | 04 | Go >= 1.21 |
 | 05 | Any modern browser |
+| 07 | Node.js >= 18 or Docker |
 
 All examples assume a running MiniObserv server at `MINIOBSERV_URL`.
+Example 07 includes its own docker-compose — it spins up the full stack automatically.
