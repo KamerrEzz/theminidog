@@ -4,7 +4,34 @@ This guide is for developers running Express.js, NestJS, or Next.js who want rea
 
 ---
 
-## 1. Why MiniObserv for Node.js projects
+## 1. What MiniObserv actually covers
+
+Before integrating, it's important to know which observability layer MiniObserv covers — and which it doesn't.
+
+```
+Layer 1 — Infrastructure        ← MiniObserv
+  Is the machine healthy?
+  CPU, memory, disk, network, log lines
+  Tools: MiniObserv, Datadog, Prometheus
+
+Layer 2 — Application (APM)
+  Is my code healthy?
+  Slow queries, N+1, stack traces, latency per function
+  Tools: Sentry, Datadog APM, OpenTelemetry
+
+Layer 3 — Business
+  Is my product healthy?
+  Active users, conversions, feature usage
+  Tools: PostHog, Mixpanel, Amplitude
+```
+
+**MiniObserv is Layer 1.** It monitors the server running your app — the OS, not your code or your data. It does not connect to your PostgreSQL, read your Prisma schema, or know anything about your business logic. When you deploy to 3 servers, it tells you each server's CPU is at 42% — it won't tell you which Prisma query caused a spike (that's Layer 2).
+
+In production you'll eventually want all three layers. Start with Layer 1 — if the server runs out of memory or disk, nothing else matters.
+
+---
+
+## 2. Why MiniObserv for Node.js projects
 
 Your framework is solid. What you don't have is visibility into what happens once it's deployed.
 

@@ -4,7 +4,34 @@ Esta guía está dirigida a desarrolladores que trabajan con Express.js, NestJS 
 
 ---
 
-## 1. Por qué MiniObserv para proyectos Node.js
+## 1. Qué cubre realmente MiniObserv
+
+Antes de integrarlo, es importante saber qué capa de observabilidad cubre MiniObserv — y cuál no.
+
+```
+Capa 1 — Infraestructura        ← MiniObserv
+  ¿La máquina está bien?
+  CPU, memoria, disco, red, líneas de log
+  Herramientas: MiniObserv, Datadog, Prometheus
+
+Capa 2 — Aplicación (APM)
+  ¿Mi código está bien?
+  Queries lentos, N+1, stack traces, latencia por función
+  Herramientas: Sentry, Datadog APM, OpenTelemetry
+
+Capa 3 — Negocio
+  ¿Mi producto está bien?
+  Usuarios activos, conversiones, uso de features
+  Herramientas: PostHog, Mixpanel, Amplitude
+```
+
+**MiniObserv es Capa 1.** Monitorea el servidor donde corre tu app — el sistema operativo, no tu código ni tus datos. No se conecta a tu PostgreSQL, no lee tu esquema de Prisma, no sabe nada de tu lógica de negocio. Cuando despliegas en 3 servidores, te dice que el CPU de cada uno está al 42% — no te dirá qué query de Prisma causó un pico de latencia (eso es Capa 2).
+
+En producción eventualmente necesitarás las tres capas. Empieza con la Capa 1 — si el servidor se queda sin memoria o disco, las otras dos no importan.
+
+---
+
+## 2. Por qué MiniObserv para proyectos Node.js
 
 Tu framework funciona bien. Lo que no tienes es visibilidad sobre lo que ocurre una vez desplegado.
 
