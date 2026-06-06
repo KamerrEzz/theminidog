@@ -1,5 +1,42 @@
 services:
+  # ── app database ─────────────────────────────────────────────
   db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tasks
+      POSTGRES_PASSWORD: tasks
+      POSTGRES_DB: tasks_db
+    volumes:
+      - app_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tasks -d tasks_db"]
+      interval: 5s
+      retries: 10
+
+  # ── the app ───────────────────────────────────────────────────
+  app:
+    build: .
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "postgresql://tasks:tasks@db:5432/tasks_db"
+      JWT_SECRET: "change-me-in-production"
+      APP_HOST: "tasks-api"
+      MINIOBSERV_URL: "http://miniobserv:8080"
+      MINIOBSERV_TOKEN: "dev-secret-token-32"
+    ports:
+      - "3001:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      miniobserv:
+        condition: service_started
+    volumes:
+      - app_logs:/var/log/app
+
+  # ── MiniObserv (observability sidecar) ───────────────────────
+  miniobserv-db:
     image: timescale/timescaledb:latest-pg16
     environment:
       POSTGRES_USER: minidog
@@ -15,35 +52,23 @@ services:
   miniobserv:
     image: kamerrezz/miniobserv-server:latest
     environment:
-      DATABASE_URL: "postgres://minidog:minidog@db:5432/miniobserv?sslmode=disable"
-      AGENT_TOKEN: "dev-secret"
+      DATABASE_URL: "postgres://minidog:minidog@miniobserv-db:5432/miniobserv?sslmode=disable"
+      AGENT_TOKEN: "dev-secret-token-32"
       ALERT_RULES: '[{"host":"*","name":"cpu.usage_pct","op":">","threshold":85,"for":"5m"},{"host":"*","name":"mem.used_pct","op":">","threshold":90,"for":"5m"}]'
     ports:
       - "8080:8080"
     depends_on:
-      db:
+      miniobserv-db:
         condition: service_healthy
 
-  agent:
+  miniobserv-agent:
     image: kamerrezz/miniobserv-agent:latest
     environment:
       SERVER_URL: "http://miniobserv:8080"
-      AGENT_TOKEN: "dev-secret"
+      AGENT_TOKEN: "dev-secret-token-32"
       AGENT_HOST: "tasks-api-host"
-    depends_on:
-      - miniobserv
-
-  app:
-    build: .
-    environment:
-      PORT: "3000"
-      APP_HOST: "tasks-api"
-      MINIOBSERV_URL: "http://miniobserv:8080"
-      MINIOBSERV_TOKEN: "dev-secret"
-    ports:
-      - "3000:3000"
-    depends_on:
-      - miniobserv
 
 volumes:
+  app_data:
   miniobserv_data:
+  app_logs:

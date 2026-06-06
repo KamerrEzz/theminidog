@@ -1,11 +1,12 @@
 import express from 'express'
 import { httpLogger } from './middleware/httpLogger.js'
+import authRouter from './routes/auth.js'
 import tasksRouter from './routes/tasks.js'
 import healthRouter from './routes/health.js'
 
 export const app = express()
-
 app.use(express.json())
 app.use(httpLogger)
 app.use('/health', healthRouter)
+app.use('/auth', authRouter)
 app.use('/tasks', tasksRouter)

@@ -1,19 +1,20 @@
-FROM node:20-alpine AS deps
+FROM node:20-slim
+
+RUN apt-get update -qq \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+
 COPY package*.json ./
+COPY prisma ./prisma
+
 RUN npm install
 
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
 RUN npm run build
 
-FROM node:20-alpine
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json .
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
